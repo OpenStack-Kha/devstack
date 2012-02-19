@@ -24,6 +24,30 @@ pushd $(cd $(dirname "$0")/.. && pwd)
 source ./openrc
 popd
 
+# Max time to wait while vm goes from build to active state
+ACTIVE_TIMEOUT=${ACTIVE_TIMEOUT:-30}
+
+# Max time till the vm is bootable
+BOOT_TIMEOUT=${BOOT_TIMEOUT:-30}
+
+# Max time to wait for proper association and dis-association.
+ASSOCIATE_TIMEOUT=${ASSOCIATE_TIMEOUT:-15}
+
+# Instance type to create
+DEFAULT_INSTANCE_TYPE=${DEFAULT_INSTANCE_TYPE:-m1.tiny}
+
+# Boot this image, use first AMi image if unset
+DEFAULT_IMAGE_NAME=${DEFAULT_IMAGE_NAME:-ami}
+
+# Security group name
+SECGROUP=${SECGROUP:-test_secgroup}
+
+# Default floating IP pool name
+DEFAULT_FLOATING_POOL=${DEFAULT_FLOATING_POOL:-nova}
+
+# Additional floating IP pool and range
+TEST_FLOATING_POOL=${TEST_FLOATING_POOL:-test}
+
 # Get a token for clients that don't support service catalog
 # ==========================================================
 
@@ -31,7 +55,7 @@ popd
 # returns a token and catalog of endpoints.  We use python to parse the token
 # and save it.
 
-TOKEN=`curl -s -d  "{\"auth\":{\"passwordCredentials\": {\"username\": \"$NOVA_USERNAME\", \"password\": \"$NOVA_PASSWORD\"}}}" -H "Content-type: application/json" http://$HOST_IP:5000/v2.0/tokens | python -c "import sys; import json; tok = json.loads(sys.stdin.read()); print tok['access']['token']['id'];"`
+TOKEN=`curl -s -d  "{\"auth\":{\"passwordCredentials\": {\"username\": \"$OS_USERNAME\", \"password\": \"$OS_PASSWORD\"}}}" -H "Content-type: application/json" ${OS_AUTH_URL%/}/tokens | python -c "import sys; import json; tok = json.loads(sys.stdin.read()); print tok['access']['token']['id'];"`
 
 # Launching a server
 # ==================
@@ -46,33 +70,41 @@ nova list
 nova image-list
 
 # But we recommend using glance directly
-glance -A $TOKEN index
+glance -f -A $TOKEN -H $GLANCE_HOST index
 
-# Let's grab the id of the first AMI image to launch
-IMAGE=`glance -A $TOKEN index | egrep ami | cut -d" " -f1`
+# Grab the id of the image to launch
+IMAGE=`glance -f -A $TOKEN -H $GLANCE_HOST index | egrep $DEFAULT_IMAGE_NAME | head -1 | cut -d" " -f1`
 
 # Security Groups
 # ---------------
-SECGROUP=test_secgroup
 
 # List of secgroups:
 nova secgroup-list
 
 # Create a secgroup
-nova secgroup-create $SECGROUP "test_secgroup description"
+if ! nova secgroup-list | grep -q $SECGROUP; then
+    nova secgroup-create $SECGROUP "$SECGROUP description"
+    if ! timeout $ASSOCIATE_TIMEOUT sh -c "while ! nova secgroup-list | grep -q $SECGROUP; do sleep 1; done"; then
+        echo "Security group not created"
+        exit 1
+    fi
+fi
 
-# determine flavor
-# ----------------
+# determinine instance type
+# -------------------------
 
-# List of flavors:
+# List of instance types:
 nova flavor-list
 
-# and grab the first flavor in the list to launch
-FLAVOR=`nova flavor-list | head -n 4 | tail -n 1 | cut -d"|" -f2`
+INSTANCE_TYPE=`nova flavor-list | grep $DEFAULT_INSTANCE_TYPE | cut -d"|" -f2`
+if [[ -z "$INSTANCE_TYPE" ]]; then
+    # grab the first flavor in the list to launch if default doesn't exist
+   INSTANCE_TYPE=`nova flavor-list | head -n 4 | tail -n 1 | cut -d"|" -f2`
+fi
 
 NAME="myserver"
 
-nova boot --flavor $FLAVOR --image $IMAGE $NAME --security_groups=$SECGROUP
+VM_UUID=`nova boot --flavor $INSTANCE_TYPE --image $IMAGE $NAME --security_groups=$SECGROUP | grep ' id ' | cut -d"|" -f3 | sed 's/ //g'`
 
 # Testing
 # =======
@@ -84,23 +116,14 @@ nova boot --flavor $FLAVOR --image $IMAGE $NAME --security_groups=$SECGROUP
 # Waiting for boot
 # ----------------
 
-# Max time to wait while vm goes from build to active state
-ACTIVE_TIMEOUT=${ACTIVE_TIMEOUT:-10}
-
-# Max time till the vm is bootable
-BOOT_TIMEOUT=${BOOT_TIMEOUT:-15}
-
-# Max time to wait for proper association and dis-association.
-ASSOCIATE_TIMEOUT=${ASSOCIATE_TIMEOUT:-10}
-
 # check that the status is active within ACTIVE_TIMEOUT seconds
-if ! timeout $ACTIVE_TIMEOUT sh -c "while ! nova show $NAME | grep status | grep -q ACTIVE; do sleep 1; done"; then
+if ! timeout $ACTIVE_TIMEOUT sh -c "while ! nova show $VM_UUID | grep status | grep -q ACTIVE; do sleep 1; done"; then
     echo "server didn't become active!"
     exit 1
 fi
 
 # get the IP of the server
-IP=`nova show $NAME | grep "private network" | cut -d"|" -f3`
+IP=`nova show $VM_UUID | grep "private network" | cut -d"|" -f3`
 
 # for single node deployments, we can ping private ips
 MULTI_HOST=${MULTI_HOST:-0}
@@ -120,24 +143,42 @@ fi
 # Security Groups & Floating IPs
 # ------------------------------
 
-# allow icmp traffic (ping)
-nova secgroup-add-rule $SECGROUP icmp -1 -1 0.0.0.0/0
+if ! nova secgroup-list-rules $SECGROUP | grep -q icmp; then
+    # allow icmp traffic (ping)
+    nova secgroup-add-rule $SECGROUP icmp -1 -1 0.0.0.0/0
+    if ! timeout $ASSOCIATE_TIMEOUT sh -c "while ! nova secgroup-list-rules $SECGROUP | grep -q icmp; do sleep 1; done"; then
+        echo "Security group rule not created"
+        exit 1
+    fi
+fi
 
 # List rules for a secgroup
 nova secgroup-list-rules $SECGROUP
 
-# allocate a floating ip
-nova floating-ip-create
+# allocate a floating ip from default pool
+FLOATING_IP=`nova floating-ip-create | grep $DEFAULT_FLOATING_POOL | cut -d '|' -f2`
 
-# store  floating address
-FLOATING_IP=`nova floating-ip-list | grep None | head -1 | cut -d '|' -f2 | sed 's/ //g'`
+# list floating addresses
+if ! timeout $ASSOCIATE_TIMEOUT sh -c "while ! nova floating-ip-list | grep -q $FLOATING_IP; do sleep 1; done"; then
+    echo "Floating IP not allocated"
+    exit 1
+fi
 
 # add floating ip to our server
-nova add-floating-ip $NAME $FLOATING_IP
+nova add-floating-ip $VM_UUID $FLOATING_IP
 
 # test we can ping our floating ip within ASSOCIATE_TIMEOUT seconds
 if ! timeout $ASSOCIATE_TIMEOUT sh -c "while ! ping -c1 -w1 $FLOATING_IP; do sleep 1; done"; then
     echo "Couldn't ping server with floating ip"
+    exit 1
+fi
+
+# Allocate an IP from second floating pool
+TEST_FLOATING_IP=`nova floating-ip-create $TEST_FLOATING_POOL | grep $TEST_FLOATING_POOL | cut -d '|' -f2`
+
+# list floating addresses
+if ! timeout $ASSOCIATE_TIMEOUT sh -c "while ! nova floating-ip-list | grep $TEST_FLOATING_POOL | grep -q $TEST_FLOATING_IP; do sleep 1; done"; then
+    echo "Floating IP not allocated"
     exit 1
 fi
 
@@ -157,12 +198,14 @@ fi
 # de-allocate the floating ip
 nova floating-ip-delete $FLOATING_IP
 
+# Delete second floating IP
+nova floating-ip-delete $TEST_FLOATING_IP
+
 # shutdown the server
-nova delete $NAME
+nova delete $VM_UUID
 
 # Delete a secgroup
 nova secgroup-delete $SECGROUP
 
 # FIXME: validate shutdown within 5 seconds
 # (nova show $NAME returns 1 or status != ACTIVE)?
-

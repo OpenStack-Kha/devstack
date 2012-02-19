@@ -10,19 +10,19 @@ $BIN_DIR/keystone-manage user add admin %ADMIN_PASSWORD%
 $BIN_DIR/keystone-manage user add demo %ADMIN_PASSWORD%
 
 # Roles
-$BIN_DIR/keystone-manage role add Admin
+$BIN_DIR/keystone-manage role add admin
 $BIN_DIR/keystone-manage role add Member
 $BIN_DIR/keystone-manage role add KeystoneAdmin
 $BIN_DIR/keystone-manage role add KeystoneServiceAdmin
 $BIN_DIR/keystone-manage role add sysadmin
 $BIN_DIR/keystone-manage role add netadmin
-$BIN_DIR/keystone-manage role grant Admin admin admin
+$BIN_DIR/keystone-manage role grant admin admin admin
 $BIN_DIR/keystone-manage role grant Member demo demo
 $BIN_DIR/keystone-manage role grant sysadmin demo demo
 $BIN_DIR/keystone-manage role grant netadmin demo demo
 $BIN_DIR/keystone-manage role grant Member demo invisible_to_admin
-$BIN_DIR/keystone-manage role grant Admin admin demo
-$BIN_DIR/keystone-manage role grant Admin admin
+$BIN_DIR/keystone-manage role grant admin admin demo
+$BIN_DIR/keystone-manage role grant admin admin
 $BIN_DIR/keystone-manage role grant KeystoneAdmin admin
 $BIN_DIR/keystone-manage role grant KeystoneServiceAdmin admin
 
@@ -36,12 +36,12 @@ if [[ "$ENABLED_SERVICES" =~ "swift" ]]; then
 fi
 
 #endpointTemplates
-$BIN_DIR/keystone-manage endpointTemplates add RegionOne nova http://%HOST_IP%:8774/v1.1/%tenant_id% http://%HOST_IP%:8774/v1.1/%tenant_id%  http://%HOST_IP%:8774/v1.1/%tenant_id% 1 1
-$BIN_DIR/keystone-manage endpointTemplates add RegionOne ec2 http://%HOST_IP%:8773/services/Cloud http://%HOST_IP%:8773/services/Admin http://%HOST_IP%:8773/services/Cloud 1 1
-$BIN_DIR/keystone-manage endpointTemplates add RegionOne glance http://%HOST_IP%:9292/v1.1/%tenant_id% http://%HOST_IP%:9292/v1.1/%tenant_id% http://%HOST_IP%:9292/v1.1/%tenant_id% 1 1
-$BIN_DIR/keystone-manage endpointTemplates add RegionOne keystone http://%HOST_IP%:5000/v2.0 http://%HOST_IP%:35357/v2.0 http://%HOST_IP%:5000/v2.0 1 1
+$BIN_DIR/keystone-manage $* endpointTemplates add RegionOne nova http://%SERVICE_HOST%:8774/v1.1/%tenant_id% http://%SERVICE_HOST%:8774/v1.1/%tenant_id%  http://%SERVICE_HOST%:8774/v1.1/%tenant_id% 1 1
+$BIN_DIR/keystone-manage $* endpointTemplates add RegionOne ec2 http://%SERVICE_HOST%:8773/services/Cloud http://%SERVICE_HOST%:8773/services/Admin http://%SERVICE_HOST%:8773/services/Cloud 1 1
+$BIN_DIR/keystone-manage $* endpointTemplates add RegionOne glance http://%SERVICE_HOST%:9292/v1 http://%SERVICE_HOST%:9292/v1 http://%SERVICE_HOST%:9292/v1 1 1
+$BIN_DIR/keystone-manage $* endpointTemplates add RegionOne keystone %KEYSTONE_SERVICE_PROTOCOL%://%KEYSTONE_SERVICE_HOST%:%KEYSTONE_SERVICE_PORT%/v2.0 %KEYSTONE_AUTH_PROTOCOL%://%KEYSTONE_AUTH_HOST%:%KEYSTONE_AUTH_PORT%/v2.0 %KEYSTONE_SERVICE_PROTOCOL%://%KEYSTONE_SERVICE_HOST%:%KEYSTONE_SERVICE_PORT%/v2.0 1 1
 if [[ "$ENABLED_SERVICES" =~ "swift" ]]; then
-    $BIN_DIR/keystone-manage endpointTemplates add RegionOne swift http://%HOST_IP%:8080/v1/AUTH_%tenant_id% http://%HOST_IP%:8080/ http://%HOST_IP%:8080/v1/AUTH_%tenant_id% 1 1
+    $BIN_DIR/keystone-manage $* endpointTemplates add RegionOne swift http://%SERVICE_HOST%:8080/v1/AUTH_%tenant_id% http://%SERVICE_HOST%:8080/ http://%SERVICE_HOST%:8080/v1/AUTH_%tenant_id% 1 1
 fi
 
 # Tokens

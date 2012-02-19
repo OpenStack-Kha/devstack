@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 #
-# build_ci_config.sh - Build a config.ini for tempest (openstack-integration-tests)
-#                      (https://github.com/openstack/tempest.git)
+# configure_tempest.sh - Build a tempest configuration file from devstack
 
 function usage {
-    echo "$0 - Build config.ini for tempest"
+    echo "$0 - Build tempest.conf"
     echo ""
     echo "Usage: $0 [configdir]"
     exit 1
@@ -19,9 +18,6 @@ cleanup() {
     set +o errexit
 
     # Mop up temporary files
-    if [ -n "$CONFIG_CONF_TMP" -a -e "$CONFIG_CONF_TMP" ]; then
-        rm -f $CONFIG_CONF_TMP
-    fi
     if [ -n "$CONFIG_INI_TMP" -a -e "$CONFIG_INI_TMP" ]; then
         rm -f $CONFIG_INI_TMP
     fi
@@ -34,7 +30,10 @@ trap cleanup SIGHUP SIGINT SIGTERM SIGQUIT EXIT
 
 # Keep track of the current directory
 TOOLS_DIR=$(cd $(dirname "$0") && pwd)
-TOP_DIR=`cd $TOOLS_DIR/..; pwd`
+TOP_DIR=$(cd $TOOLS_DIR/..; pwd)
+
+# Import common functions
+. $TOP_DIR/functions
 
 # Abort if localrc is not set
 if [ ! -e $TOP_DIR/localrc ]; then
@@ -46,53 +45,21 @@ fi
 # Source params
 source ./stackrc
 
+# Set defaults not configured by stackrc
+TENANT=${TENANT:-admin}
+USERNAME=${USERNAME:-admin}
+IDENTITY_HOST=${IDENTITY_HOST:-$HOST_IP}
+IDENTITY_PORT=${IDENTITY_PORT:-5000}
+IDENTITY_API_VERSION=${IDENTITY_API_VERSION:-2.0}
+
 # Where Openstack code lives
 DEST=${DEST:-/opt/stack}
 
-CITEST_DIR=$DEST/tempest
+TEMPEST_DIR=$DEST/tempest
 
-CONFIG_DIR=${1:-$CITEST_DIR/etc}
-CONFIG_CONF=$CONFIG_DIR/storm.conf
+CONFIG_DIR=${1:-$TEMPEST_DIR/etc}
 CONFIG_INI=$CONFIG_DIR/config.ini
-
-DIST_NAME=${DIST_NAME:-oneiric}
-
-# git clone only if directory doesn't exist already.  Since ``DEST`` might not
-# be owned by the installation user, we create the directory and change the
-# ownership to the proper user.
-function git_clone {
-
-    GIT_REMOTE=$1
-    GIT_DEST=$2
-    GIT_BRANCH=$3
-
-    # do a full clone only if the directory doesn't exist
-    if [ ! -d $GIT_DEST ]; then
-        git clone $GIT_REMOTE $GIT_DEST
-        cd $2
-        # This checkout syntax works for both branches and tags
-        git checkout $GIT_BRANCH
-    elif [[ "$RECLONE" == "yes" ]]; then
-        # if it does exist then simulate what clone does if asked to RECLONE
-        cd $GIT_DEST
-        # set the url to pull from and fetch
-        git remote set-url origin $GIT_REMOTE
-        git fetch origin
-        # remove the existing ignored files (like pyc) as they cause breakage
-        # (due to the py files having older timestamps than our pyc, so python
-        # thinks the pyc files are correct using them)
-        find $GIT_DEST -name '*.pyc' -delete
-        git checkout -f origin/$GIT_BRANCH
-        # a local branch might not exist
-        git branch -D $GIT_BRANCH || true
-        git checkout -b $GIT_BRANCH
-    fi
-}
-
-# Install tests and prerequisites
-sudo PIP_DOWNLOAD_CACHE=/var/cache/pip pip install --use-mirrors `cat $TOP_DIR/files/pips/tempest`
-
-git_clone $CITEST_REPO $CITEST_DIR $CITEST_BRANCH
+TEMPEST_CONF=$CONFIG_DIR/tempest.conf
 
 if [ ! -f $DEST/.ramdisk ]; then
     # Process network configuration vars
@@ -123,30 +90,58 @@ set `echo $GLANCE_HOSTPORT | tr ':' ' '`
 GLANCE_HOST=$1
 GLANCE_PORT=$2
 
-# Create storm.conf
+# Set up downloaded images
+# Defaults to use first image
 
-CONFIG_CONF_TMP=$(mktemp $CONFIG_CONF.XXXXXX)
-    cat >$CONFIG_CONF_TMP <<EOF
-[nova]
-auth_url=http://$HOST_IP:5000/v2.0/tokens
-user=admin
-api_key=$ADMIN_PASSWORD
-tenant_name=admin
-ssh_timeout=300
-build_interval=10
-build_timeout=600
+IMAGE_DIR=""
+IMAGE_NAME=""
+for imagedir in $TOP_DIR/files/images/*; do
+    KERNEL=""
+    RAMDISK=""
+    IMAGE=""
+    IMAGE_RAMDISK=""
+    KERNEL=$(for f in "$imagedir/"*-vmlinuz*; do
+        [ -f "$f" ] && echo "$f" && break; done; true)
+    [ -n "$KERNEL" ] && ln -sf $KERNEL $imagedir/kernel
+    RAMDISK=$(for f in "$imagedir/"*-initrd*; do
+        [ -f "$f" ] && echo "$f" && break; done; true)
+    [ -n "$RAMDISK" ] && ln -sf $RAMDISK $imagedir/ramdisk && \
+                         IMAGE_RAMDISK="ari_location = $imagedir/ramdisk"
+    IMAGE=$(for f in "$imagedir/"*.img; do
+        [ -f "$f" ] && echo "$f" && break; done; true)
+    if [ -n "$IMAGE" ]; then
+        ln -sf $IMAGE $imagedir/disk
+        # Save the first image directory that contains a disk image link
+        if [ -z "$IMAGE_DIR" ]; then
+            IMAGE_DIR=$imagedir
+            IMAGE_NAME=$(basename ${IMAGE%.img})
+        fi
+    fi
+done
+if [[ -n "$IMAGE_NAME" ]]; then
+    # Get the image UUID
+    IMAGE_UUID=$(nova image-list | grep " $IMAGE_NAME " | cut -d'|' -f2)
+    # Strip spaces off
+    IMAGE_UUID=$(echo $IMAGE_UUID)
+fi
 
-[environment]
-image_ref=3
-image_ref_alt=4
-flavor_ref=1
-flavor_ref_alt=2
-create_image_enabled=true
-resize_available=true
-authentication=keystone_v2
-EOF
-mv $CONFIG_CONF_TMP $CONFIG_CONF
-CONFIG_CONF_TMP=""
+# Create tempest.conf from tempest.conf.sample
+
+if [[ ! -r $TEMPEST_CONF ]]; then
+    cp $TEMPEST_CONF.sample $TEMPEST_CONF
+fi
+
+sed -e "
+    /^api_key=/s|=.*\$|=$ADMIN_PASSWORD|;
+    /^auth_url=/s|=.*\$|=${OS_AUTH_URL%/}/tokens/|;
+    /^host=/s|=.*\$|=$HOST_IP|;
+    /^image_ref=/s|=.*\$|=$IMAGE_UUID|;
+    /^password=/s|=.*\$|=$ADMIN_PASSWORD|;
+    /^tenant=/s|=.*\$|=$TENANT|;
+    /^tenant_name=/s|=.*\$|=$TENANT|;
+    /^user=/s|=.*\$|=$USERNAME|;
+    /^username=/s|=.*\$|=$USERNAME|;
+" -i $TEMPEST_CONF
 
 # Create config.ini
 
@@ -154,9 +149,9 @@ CONFIG_INI_TMP=$(mktemp $CONFIG_INI.XXXXXX)
 if [ "$UPLOAD_LEGACY_TTY" ]; then
     cat >$CONFIG_INI_TMP <<EOF
 [environment]
-aki_location = $DEST/devstack/files/images/aki-tty/image
-ari_location = $DEST/devstack/files/images/ari-tty/image
-ami_location = $DEST/devstack/files/images/ami-tty/image
+aki_location = $TOP_DIR/files/images/aki-tty/image
+ari_location = $TOP_DIR/files/images/ari-tty/image
+ami_location = $TOP_DIR/files/images/ami-tty/image
 image_ref = 3
 image_ref_alt = 3
 flavor_ref = 1
@@ -173,9 +168,9 @@ EOF
 else
     cat >$CONFIG_INI_TMP <<EOF
 [environment]
-aki_location = $DEST/openstack-integration-tests/include/sample_vm/$DIST_NAME-server-cloudimg-amd64-vmlinuz-virtual
-#ari_location = $DEST/openstack-integration-tests/include/sample_vm/$DIST_NAME-server-cloudimg-amd64-loader
-ami_location = $DEST/openstack-integration-tests/include/sample_vm/$DIST_NAME-server-cloudimg-amd64.img
+aki_location = $IMAGE_DIR/kernel
+ami_location = $IMAGE_DIR/disk
+$IMAGE_RAMDISK
 image_ref = 2
 image_ref_alt = 2
 flavor_ref = 1
@@ -185,8 +180,8 @@ flavor_ref_alt = 2
 host = $GLANCE_HOST
 apiver = v1
 port = $GLANCE_PORT
-image_id = 1
-image_id_alt = 1
+image_id = 2
+image_id_alt = 2
 tenant_id = 1
 EOF
 fi
