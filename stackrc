@@ -1,47 +1,47 @@
 # compute service
-NOVA_REPO=https://github.com/openstack/nova.git
-NOVA_BRANCH=master
+NOVA_REPO=https://github.com/OpenStack-Kha/nova.git
+NOVA_BRANCH=stable-essex2
 
 # storage service
-SWIFT_REPO=https://github.com/openstack/swift.git
-SWIFT_BRANCH=master
+SWIFT_REPO=https://github.com/OpenStack-Kha/swift.git
+SWIFT_BRANCH=stable-essex2
 
 # swift and keystone integration
-SWIFT_KEYSTONE_REPO=https://github.com/cloudbuilders/swift-keystone2.git
-SWIFT_KEYSTONE_BRANCH=master
+SWIFT_KEYSTONE_REPO=https://github.com/OpenStack-Kha/swift-keystone2.git
+SWIFT_KEYSTONE_BRANCH=stable-essex2
 
 # image catalog service
-GLANCE_REPO=https://github.com/openstack/glance.git
-GLANCE_BRANCH=master
+GLANCE_REPO=https://github.com/OpenStack-Kha/glance.git
+GLANCE_BRANCH=stable-essex2
 
 # unified auth system (manages accounts/tokens)
-KEYSTONE_REPO=https://github.com/openstack/keystone.git
+KEYSTONE_REPO=https://github.com/OpenStack-Kha/keystone.git
 KEYSTONE_BRANCH=stable/diablo
 
 # a websockets/html5 or flash powered VNC console for vm instances
-NOVNC_REPO=https://github.com/cloudbuilders/noVNC.git
-NOVNC_BRANCH=master
+NOVNC_REPO=https://github.com/OpenStack-Kha/noVNC.git
+NOVNC_BRANCH=stable-essex2
 
 # django powered web control panel for openstack
-HORIZON_REPO=https://github.com/openstack/horizon.git
-HORIZON_BRANCH=master
+HORIZON_REPO=https://github.com/OpenStack-Kha/horizon.git
+HORIZON_BRANCH=stable-essex2
 
 # python client library to nova that horizon (and others) use
-NOVACLIENT_REPO=https://github.com/openstack/python-novaclient.git
-NOVACLIENT_BRANCH=master
+NOVACLIENT_REPO=https://github.com/OpenStack-Kha/python-novaclient.git
+NOVACLIENT_BRANCH=stable-essex2
 
 # openstackx is a collection of extensions to openstack.compute & nova
 # that is *deprecated*.  The code is being moved into python-novaclient & nova.
-OPENSTACKX_REPO=https://github.com/cloudbuilders/openstackx.git
-OPENSTACKX_BRANCH=master
+OPENSTACKX_REPO=https://github.com/OpenStack-Kha/openstackx.git
+OPENSTACKX_BRANCH=stable-essex2
 
 # quantum service
-QUANTUM_REPO=https://github.com/openstack/quantum
-QUANTUM_BRANCH=master
+QUANTUM_REPO=https://github.com/OpenStack-Kha/quantum.git
+QUANTUM_BRANCH=stable-essex2
 
 # CI test suite
-CITEST_REPO=https://github.com/openstack/tempest.git
-CITEST_BRANCH=master
+CITEST_REPO=https://github.com/OpenStack-Kha/tempest.git
+CITEST_BRANCH=stable-essex2
 
 # Specify a comma-separated list of uec images to download and install into glance.
 # supported urls here are:
