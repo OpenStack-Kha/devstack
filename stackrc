@@ -10,56 +10,56 @@ RC_DIR=$(cd $(dirname "$BASH_SOURCE") && pwd)
 ENABLED_SERVICES=g-api,g-reg,key,n-api,n-crt,n-obj,n-cpu,n-net,n-vol,n-sch,n-novnc,n-xvnc,n-cauth,horizon,mysql,rabbit
 
 # compute service
-NOVA_REPO=https://github.com/openstack/nova.git
-NOVA_BRANCH=stable/essex
+NOVA_REPO=https://github.com/OpenStack-Kha/nova.git
+NOVA_BRANCH=rc4
 
 # storage service
-SWIFT_REPO=https://github.com/openstack/swift.git
-SWIFT_BRANCH=stable/essex
+SWIFT_REPO=https://github.com/OpenStack-Kha/swift.git
+SWIFT_BRANCH=rc4
 
 # image catalog service
-GLANCE_REPO=https://github.com/openstack/glance.git
-GLANCE_BRANCH=stable/essex
+GLANCE_REPO=https://github.com/OpenStack-Kha/glance.git
+GLANCE_BRANCH=rc4
 
 # unified auth system (manages accounts/tokens)
-KEYSTONE_REPO=https://github.com/openstack/keystone.git
-KEYSTONE_BRANCH=stable/essex
+KEYSTONE_REPO=https://github.com/OpenStack-Kha/keystone.git
+KEYSTONE_BRANCH=rc4
 
 # a websockets/html5 or flash powered VNC console for vm instances
-NOVNC_REPO=https://github.com/cloudbuilders/noVNC.git
-NOVNC_BRANCH=master
+NOVNC_REPO=https://github.com/OpenStack-Kha/noVNC.git
+NOVNC_BRANCH=rc4
 
 # django powered web control panel for openstack
-HORIZON_REPO=https://github.com/openstack/horizon.git
-HORIZON_BRANCH=stable/essex
+HORIZON_REPO=https://github.com/OpenStack-Kha/horizon.git
+HORIZON_BRANCH=rc4
 
 # python client library to nova that horizon (and others) use
-NOVACLIENT_REPO=https://github.com/openstack/python-novaclient.git
-NOVACLIENT_BRANCH=master
+NOVACLIENT_REPO=https://github.com/OpenStack-Kha/python-novaclient.git
+NOVACLIENT_BRANCH=rc4
 
 # python keystone client library to nova that horizon uses
-KEYSTONECLIENT_REPO=https://github.com/openstack/python-keystoneclient
-KEYSTONECLIENT_BRANCH=master
+KEYSTONECLIENT_REPO=https://github.com/OpenStack-Kha/python-keystoneclient.git
+KEYSTONECLIENT_BRANCH=rc4
 
 # quantum service
-QUANTUM_REPO=https://github.com/openstack/quantum
-QUANTUM_BRANCH=stable/essex
+QUANTUM_REPO=https://github.com/OpenStack-Kha/quantum.git
+QUANTUM_BRANCH=rc4
 
 # quantum client
-QUANTUM_CLIENT_REPO=https://github.com/openstack/python-quantumclient
-QUANTUM_CLIENT_BRANCH=master
+QUANTUM_CLIENT_REPO=https://github.com/OpenStack-Kha/python-quantumclient.git
+QUANTUM_CLIENT_BRANCH=rc4
 
 # Tempest test suite
-TEMPEST_REPO=https://github.com/openstack/tempest.git
-TEMPEST_BRANCH=master
+TEMPEST_REPO=https://github.com/OpenStack-Kha/tempest.git
+TEMPEST_BRANCH=rc4
 
 # melange service
-MELANGE_REPO=https://github.com/openstack/melange.git
-MELANGE_BRANCH=master
+MELANGE_REPO=https://github.com/OpenStack-Kha/melange.git
+MELANGE_BRANCH=rc4
 
 # python melange client library
-MELANGECLIENT_REPO=https://github.com/openstack/python-melangeclient.git
-MELANGECLIENT_BRANCH=master
+MELANGECLIENT_REPO=https://github.com/OpenStack-Kha/python-melangeclient.git
+MELANGECLIENT_BRANCH=rc4
 
 # Specify a comma-separated list of uec images to download and install into glance.
 # supported urls here are:
