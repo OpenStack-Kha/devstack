@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# ``stack_centos2.sh`` is an opinionated OpenStack developer installation.  It
+# ``stack_centos.sh`` is an opinionated OpenStack developer installation.  It
 # installs and configures various combinations of **Glance**, **Horizon**,
 # **Keystone**, **Melange**, **Nova**, **Quantum** and **Swift**
 
@@ -44,20 +44,20 @@ fi
 # Settings
 # ========
 
-# ``stack_centos2.sh`` is customizable through setting environment variables.  If you
+# ``stack_centos.sh`` is customizable through setting environment variables.  If you
 # want to override a setting you can set and export it::
 #
 #     export MYSQL_PASSWORD=anothersecret
-#     ./stack_centos2.sh
+#     ./stack_centos.sh
 #
-# You can also pass options on a single line ``MYSQL_PASSWORD=simple ./stack_centos2.sh``
+# You can also pass options on a single line ``MYSQL_PASSWORD=simple ./stack_centos.sh``
 #
 # Additionally, you can put any local variables into a ``localrc`` file::
 #
 #     MYSQL_PASSWORD=anothersecret
 #     MYSQL_USER=hellaroot
 #
-# We try to have sensible defaults, so you should be able to run ``./stack_centos2.sh``
+# We try to have sensible defaults, so you should be able to run ``./stack_centos.sh``
 # in most cases.
 #
 # DevStack distributes ``stackrc`` which contains locations for the OpenStack
@@ -69,10 +69,10 @@ fi
 # ``http_proxy`` and ``https_proxy``.  They can be set in ``localrc`` if necessary
 # or on the command line::
 #
-#     http_proxy=http://proxy.example.com:3128/ ./stack_centos2.sh
+#     http_proxy=http://proxy.example.com:3128/ ./stack_centos.sh
 
 if [[ ! -r $TOP_DIR/stackrc ]]; then
-    echo "ERROR: missing $TOP_DIR/stackrc - did you grab more than just stack_centos2.sh?"
+    echo "ERROR: missing $TOP_DIR/stackrc - did you grab more than just stack_centos.sh?"
     exit 1
 fi
 source $TOP_DIR/stackrc
@@ -101,19 +101,19 @@ else
     NOVA_ROOTWRAP=/usr/bin/nova-rootwrap
 fi
 
-# stack_centos2.sh keeps the list of ``apt`` and ``pip`` dependencies in external
+# stack_centos.sh keeps the list of ``apt`` and ``pip`` dependencies in external
 # files, along with config templates and other useful files.  You can find these
 # in the ``files`` directory (next to this script).  We will reference this
 # directory using the ``FILES`` variable in this script.
 FILES=$TOP_DIR/files
 if [ ! -d $FILES ]; then
-    echo "ERROR: missing devstack/files - did you grab more than just stack_centos2.sh?"
+    echo "ERROR: missing devstack/files - did you grab more than just stack_centos.sh?"
     exit 1
 fi
 
 # Check to see if we are already running DevStack
 if type -p screen >/dev/null && screen -ls | egrep -q "[0-9].stack"; then
-    echo "You are already running a stack_centos2.sh session."
+    echo "You are already running a stack_centos.sh session."
     echo "To rejoin this session type 'screen -x stack'."
     echo "To destroy this session, kill the running screen."
     exit 1
@@ -121,7 +121,7 @@ fi
 
 # OpenStack is designed to be run as a regular user (Horizon will fail to run
 # as root, since apache refused to startup serve content from root user).  If
-# ``stack_centos2.sh`` is run as **root**, it automatically creates a **stack** user with
+# ``stack_centos.sh`` is run as **root**, it automatically creates a **stack** user with
 # sudo privileges and runs as that user.
 
 
@@ -152,9 +152,9 @@ if [[ $EUID -eq 0 ]]; then
     cp -r -f -T "$PWD" "$STACK_DIR"
     chown -R stack "$STACK_DIR"
     if [[ "$SHELL_AFTER_RUN" != "no" ]]; then
-        exec su -c "set -e; cd $STACK_DIR; bash stack_centos2.sh; bash" stack
+        exec su -c "set -e; cd $STACK_DIR; bash stack_centos.sh; bash" stack
     else
-        exec su -c "set -e; cd $STACK_DIR; bash stack_centos2.sh" stack
+        exec su -c "set -e; cd $STACK_DIR; bash stack_centos.sh" stack
     fi
     exit 1
 else
@@ -174,8 +174,8 @@ fi
 
 
 
-# Set True to configure ``stack_centos2.sh`` to run cleanly without Internet access.
-# ``stack_centos2.sh`` must have been previously run with Internet access to install
+# Set True to configure ``stack_centos.sh`` to run cleanly without Internet access.
+# ``stack_centos.sh`` must have been previously run with Internet access to install
 # prerequisites and initialize ``$DEST``.
 OFFLINE=`trueorfalse False $OFFLINE`
 
@@ -213,7 +213,7 @@ VOLUME_NAME_PREFIX=${VOLUME_NAME_PREFIX:-volume-}
 INSTANCE_NAME_PREFIX=${INSTANCE_NAME_PREFIX:-instance-}
 
 # Nova hypervisor configuration.  We default to libvirt with **kvm** but will
-# drop back to **qemu** if we are unable to load the kvm module.  ``stack_centos2.sh`` can
+# drop back to **qemu** if we are unable to load the kvm module.  ``stack_centos.sh`` can
 # also install an **LXC** based system.
 VIRT_DRIVER=${VIRT_DRIVER:-libvirt}
 LIBVIRT_TYPE=${LIBVIRT_TYPE:-kvm}
@@ -498,7 +498,7 @@ APACHE_GROUP=${APACHE_GROUP:-$APACHE_USER}
 # Log files
 # ---------
 
-# Set up logging for stack_centos2.sh
+# Set up logging for stack_centos.sh
 # Set LOGFILE to turn on logging
 # We append '.xxxxxxxx' to the given name to maintain history
 # where xxxxxxxx is a representation of the date the file was created
@@ -520,7 +520,7 @@ if [[ -n "$LOGFILE" ]]; then
     LOGFILE=$LOGFILE.${CURRENT_LOG_TIME}
     # Redirect stdout/stderr to tee to write the log file
     exec 1> >( tee "${LOGFILE}" ) 2>&1
-    echo "stack_centos2.sh log $LOGFILE"
+    echo "stack_centos.sh log $LOGFILE"
     # Specified logfile name always links to the most recent log
     ln -sf $LOGFILE $LOGDIR/$LOGNAME
 fi
@@ -574,7 +574,7 @@ fi
 #
 # Only packages required for the services in ENABLED_SERVICES will be
 # included.  Two bits of metadata are recognized in the prerequisite files:
-# - ``# NOPRIME`` defers installation to be performed later in stack_centos2.sh
+# - ``# NOPRIME`` defers installation to be performed later in stack_centos.sh
 # - ``# dist:DISTRO`` or ``dist:DISTRO1,DISTRO2`` limits the selection
 #   of the package to the distros listed.  The distro names are case insensitive.
 #
@@ -1447,7 +1447,7 @@ if is_service_enabled n-vol; then
     # Configure a default volume group called 'nova-volumes' for the nova-volume
     # service if it does not yet exist.  If you don't wish to use a file backed
     # volume group, create your own volume group called 'nova-volumes' before
-    # invoking stack_centos2.sh.
+    # invoking stack_centos.sh.
     #
     # By default, the backing file is 2G in size, and is stored in /opt/stack.
 
@@ -1939,4 +1939,4 @@ if [[ -n "$EXTRA_FLAGS" ]]; then
 fi
 
 # Indicate how long this took to run (bash maintained variable 'SECONDS')
-echo "stack_centos2.sh completed in $SECONDS seconds."
+echo "stack_centos.sh completed in $SECONDS seconds."
