@@ -72,23 +72,16 @@ if [[ ! -r $TOP_DIR/stackrc ]]; then
     echo "ERROR: missing $TOP_DIR/stackrc - did you grab more than just stack.sh?"
     exit 1
 fi
-source ./stackrc
+source $TOP_DIR/stackrc
 
 # Destination path for installation ``DEST``
 DEST=${DEST:-/opt/stack}
 
-
-# Sanity Check
-# ============
-
-# Warn users who aren't on an explicitly supported distro, but allow them to
-# override check and attempt installation with ``FORCE=yes ./stack``
-if [[ ! ${DISTRO} =~ (oneiric|precise) ]]; then
-    echo "WARNING: this script has only been tested on oneiric and precise"
-    if [[ "$FORCE" != "yes" ]]; then
-        echo "If you wish to run this script anyway run with FORCE=yes"
-        exit 1
-    fi
+# Set the paths of certain binaries
+if [[ "$os_PACKAGE" = "deb" ]]; then
+    NOVA_ROOTWRAP=/usr/local/bin/nova-rootwrap
+else
+    NOVA_ROOTWRAP=/usr/bin/nova-rootwrap
 fi
 
 # stack.sh keeps the list of ``apt`` and ``pip`` dependencies in external
@@ -120,10 +113,6 @@ if [[ $EUID -eq 0 ]]; then
     echo "In $ROOTSLEEP seconds, we will create a user 'stack' and run as that user"
     sleep $ROOTSLEEP
 
-    # since this script runs as a normal user, we need to give that user
-    # ability to run sudo
-    dpkg -l sudo || apt_get update && install_package sudo
-
     if ! getent passwd stack >/dev/null; then
         echo "Creating a user called stack"
         useradd -U -G sudo -s /bin/bash -d $DEST -m stack
@@ -147,9 +136,6 @@ if [[ $EUID -eq 0 ]]; then
     fi
     exit 1
 else
-    # We're not root, make sure sudo is available
-    dpkg -l sudo || die "Sudo is required.  Re-run stack.sh as root ONE TIME ONLY to set up sudo."
-
     # UEC images /etc/sudoers does not have a '#includedir'. add one.
     sudo grep -q "^#includedir.*/etc/sudoers.d" /etc/sudoers ||
         echo "#includedir /etc/sudoers.d" | sudo tee -a /etc/sudoers
@@ -282,6 +268,32 @@ function read_password {
     fi
     set -o xtrace
 }
+
+
+
+# This function will check if the service(s) specified in argument is
+# enabled by the user in ENABLED_SERVICES.
+#
+# If there is multiple services specified as argument it will act as a
+# boolean OR or if any of the services specified on the command line
+# return true.
+#
+# There is a special cases for some 'catch-all' services :
+#      nova would catch if any service enabled start by n-
+#    glance would catch if any service enabled start by g-
+#   quantum would catch if any service enabled start by q-
+function is_service_enabled() {
+    services=$@
+    for service in ${services}; do
+        [[ ,${ENABLED_SERVICES}, =~ ,${service}, ]] && return 0
+        [[ ${service} == "nova" && ${ENABLED_SERVICES} =~ "n-" ]] && return 0
+        [[ ${service} == "glance" && ${ENABLED_SERVICES} =~ "g-" ]] && return 0
+        [[ ${service} == "quantum" && ${ENABLED_SERVICES} =~ "q-" ]] && return 0
+    done
+    return 1
+}
+
+
 
 
 # Nova Network Configuration
@@ -549,6 +561,8 @@ fi
 # - ``# NOPRIME`` defers installation to be performed later in stack.sh
 # - ``# dist:DISTRO`` or ``dist:DISTRO1,DISTRO2`` limits the selection
 #   of the package to the distros listed.  The distro names are case insensitive.
+#
+# get_packages dir
 function get_packages() {
     local package_dir=$1
     local file_to_parse
@@ -604,9 +618,6 @@ function get_packages() {
     done
 }
 
-# install apt requirements
-apt_get update
-install_package $(get_packages $FILES/apts)
 
 # install python requirements
 pip_install $(get_packages $FILES/pips | sort -u)
@@ -722,6 +733,10 @@ if is_service_enabled rabbit; then
     install_package rabbitmq-server > "$tfile" 2>&1
     cat "$tfile"
     rm -f "$tfile"
+    if [[ "$os_PACKAGE" = "rpm" ]]; then
+        # RPM doesn't start the service
+        restart_service rabbitmq-server
+    fi
     # change the rabbit password since the default is "guest"
     sudo rabbitmqctl change_password guest $RABBIT_PASSWORD
 fi
@@ -732,13 +747,15 @@ fi
 
 if is_service_enabled mysql; then
 
-    # Seed configuration with mysql password so that apt-get install doesn't
-    # prompt us for a password upon install.
-    cat <<MYSQL_PRESEED | sudo debconf-set-selections
+    if [[ "$os_PACKAGE" = "deb" ]]; then
+        # Seed configuration with mysql password so that apt-get install doesn't
+        # prompt us for a password upon install.
+        cat <<MYSQL_PRESEED | sudo debconf-set-selections
 mysql-server-5.1 mysql-server/root_password password $MYSQL_PASSWORD
 mysql-server-5.1 mysql-server/root_password_again password $MYSQL_PASSWORD
 mysql-server-5.1 mysql-server/start_on_boot boolean true
 MYSQL_PRESEED
+    fi
 
     # while ``.my.cnf`` is not needed for openstack to function, it is useful
     # as it allows you to access the mysql databases via ``mysql nova`` instead
@@ -755,12 +772,25 @@ EOF
 
     # Install and start mysql-server
     install_package mysql-server
+    if [[ "$os_PACKAGE" = "rpm" ]]; then
+        # RPM doesn't start the service
+        start_service mysqld
+        # Set the root password - only works the first time
+        sudo mysqladmin -u root password $MYSQL_PASSWORD || true
+    fi
     # Update the DB to give user ‘$MYSQL_USER’@’%’ full control of the all databases:
     sudo mysql -uroot -p$MYSQL_PASSWORD -h127.0.0.1 -e "GRANT ALL PRIVILEGES ON *.* TO '$MYSQL_USER'@'%' identified by '$MYSQL_PASSWORD';"
 
     # Edit /etc/mysql/my.cnf to change ‘bind-address’ from localhost (127.0.0.1) to any (0.0.0.0) and restart the mysql service:
-    sudo sed -i 's/127.0.0.1/0.0.0.0/g' /etc/mysql/my.cnf
-    restart_service mysql
+    if [[ "$os_PACKAGE" = "deb" ]]; then
+        MY_CNF=/etc/mysql/my.cnf
+        MYSQL=mysql
+    else
+        MY_CNF=/etc/my.cnf
+        MYSQL=mysqld
+    fi
+    sudo sed -i 's/127.0.0.1/0.0.0.0/g' $MY_CNF
+    restart_service $MYSQL
 fi
 
 if [ -z "$SCREEN_HARDSTATUS" ]; then
@@ -820,10 +850,6 @@ screen -r stack -X hardstatus alwayslastline "$SCREEN_HARDSTATUS"
 
 if is_service_enabled horizon; then
 
-    # Install apache2, which is NOPRIME'd
-    install_package apache2 libapache2-mod-wsgi
-
-
     # Remove stale session database.
     rm -f $HORIZON_DIR/openstack_dashboard/local/dashboard_openstack.sqlite3
 
@@ -835,18 +861,38 @@ if is_service_enabled horizon; then
     # users).  The user system is external (keystone).
     cd $HORIZON_DIR
     python manage.py syncdb
+    cd $TOP_DIR
 
     # create an empty directory that apache uses as docroot
     sudo mkdir -p $HORIZON_DIR/.blackhole
 
-    ## Configure apache's 000-default to run horizon
-    sudo cp $FILES/000-default.template /etc/apache2/sites-enabled/000-default
-    sudo sed -e "
+    if [[ "$os_PACKAGE" = "deb" ]]; then
+        # Install apache2, which is NOPRIME'd
+        APACHE_NAME=apache2
+        APACHE_CONF=sites-available/horizon
+        install_package apache2 libapache2-mod-wsgi
+        # Clean up the old config name
+        sudo rm -f /etc/apache2/sites-enabled/000-default
+        # Be a good citizen and use the distro tools here
+        sudo touch /etc/$APACHE_NAME/$APACHE_CONF
+        sudo a2ensite horizon
+    else
+        # Install httpd, which is NOPRIME'd
+        APACHE_NAME=httpd
+        APACHE_CONF=conf.d/horizon.conf
+        sudo rm -f /etc/httpd/conf.d/000-*
+        install_package httpd mod_wsgi
+        sudo sed '/^Listen/s/^.*$/Listen 0.0.0.0:80/' -i /etc/httpd/conf/httpd.conf
+    fi
+    ## Configure apache to run horizon
+    sudo sh -c "sed -e \"
         s,%USER%,$APACHE_USER,g;
         s,%GROUP%,$APACHE_GROUP,g;
         s,%HORIZON_DIR%,$HORIZON_DIR,g;
-    " -i /etc/apache2/sites-enabled/000-default
-    restart_service apache2
+        s,%APACHE_NAME%,$APACHE_NAME,g;
+        s,%DEST%,$DEST,g;
+    \" $FILES/apache-horizon.template >/etc/$APACHE_NAME/$APACHE_CONF"
+    restart_service $APACHE_NAME
 fi
 
 
@@ -897,6 +943,15 @@ if is_service_enabled g-reg; then
     iniset $GLANCE_API_CONF DEFAULT filesystem_store_datadir $GLANCE_IMAGE_DIR/
     iniset $GLANCE_API_CONF paste_deploy flavor keystone
 
+    # Store the images in swift if enabled.
+    if is_service_enabled swift; then
+        iniset $GLANCE_API_CONF DEFAULT default_store swift
+        iniset $GLANCE_API_CONF DEFAULT swift_store_auth_address $KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_SERVICE_HOST:$KEYSTONE_SERVICE_PORT/v2.0/
+        iniset $GLANCE_API_CONF DEFAULT swift_store_user $SERVICE_TENANT_NAME:glance
+        iniset $GLANCE_API_CONF DEFAULT swift_store_key $SERVICE_PASSWORD
+        iniset $GLANCE_API_CONF DEFAULT swift_store_create_container_on_put True
+    fi
+
     GLANCE_API_PASTE_INI=$GLANCE_CONF_DIR/glance-api-paste.ini
     cp $GLANCE_DIR/etc/glance-api-paste.ini $GLANCE_API_PASTE_INI
     iniset $GLANCE_API_PASTE_INI filter:authtoken auth_host $KEYSTONE_AUTH_HOST
@@ -921,8 +976,13 @@ if is_service_enabled q-svc; then
     if [[ "$Q_PLUGIN" = "openvswitch" ]]; then
         # Install deps
         # FIXME add to files/apts/quantum, but don't install if not needed!
-        kernel_version=`cat /proc/version | cut -d " " -f3`
-        install_package openvswitch-switch openvswitch-datapath-dkms linux-headers-$kernel_version
+        if [[ "$os_PACKAGE" = "deb" ]]; then
+            kernel_version=`cat /proc/version | cut -d " " -f3`
+            install_package openvswitch-switch openvswitch-datapath-dkms linux-headers-$kernel_version
+        else
+            ### FIXME(dtroyer): Find RPMs for OpenVSwitch
+            echo "OpenVSwitch packages need to be located"
+        fi
         # Create database for the plugin/agent
         if is_service_enabled mysql; then
             mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'DROP DATABASE IF EXISTS ovs_quantum;'
@@ -1044,7 +1104,12 @@ if is_service_enabled n-cpu; then
 
     # Virtualization Configuration
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    install_package libvirt-bin
+    if [[ "$os_PACKAGE" = "deb" ]]; then
+        LIBVIRT_PKG_NAME=libvirt-bin
+    else
+        LIBVIRT_PKG_NAME=libvirt
+    fi
+    install_package $LIBVIRT_PKG_NAME
 
     # Force IP forwarding on, just on case
     sudo sysctl -w net.ipv4.ip_forward=1
@@ -1067,27 +1132,50 @@ if is_service_enabled n-cpu; then
     # splitting a system into many smaller parts.  LXC uses cgroups and chroot
     # to simulate multiple systems.
     if [[ "$LIBVIRT_TYPE" == "lxc" ]]; then
-        if [[ "$DISTRO" > natty ]]; then
-            install_package cgroup-lite
+        if [[ "$os_PACKAGE" = "deb" ]]; then
+            if [[ "$DISTRO" > natty ]]; then
+                install_package cgroup-lite
+            else
+                cgline="none /cgroup cgroup cpuacct,memory,devices,cpu,freezer,blkio 0 0"
+                sudo mkdir -p /cgroup
+                if ! grep -q cgroup /etc/fstab; then
+                    echo "$cgline" | sudo tee -a /etc/fstab
+                fi
+                if ! mount -n | grep -q cgroup; then
+                    sudo mount /cgroup
+                fi
+            fi
         else
-            cgline="none /cgroup cgroup cpuacct,memory,devices,cpu,freezer,blkio 0 0"
-            sudo mkdir -p /cgroup
-            if ! grep -q cgroup /etc/fstab; then
-                echo "$cgline" | sudo tee -a /etc/fstab
-            fi
-            if ! mount -n | grep -q cgroup; then
-                sudo mount /cgroup
-            fi
+            ### FIXME(dtroyer): figure this out
+            echo "RPM-based cgroup not implemented yet"
+            yum_install libcgroup-tools
         fi
     fi
 
+    if [[ "$os_PACKAGE" = "deb" ]]; then
+        LIBVIRT_DAEMON=libvirt-bin
+    else
+        # http://wiki.libvirt.org/page/SSHPolicyKitSetup
+        if ! grep ^libvirtd: /etc/group >/dev/null; then
+            sudo groupadd libvirtd
+        fi
+        sudo bash -c 'cat <<EOF >/etc/polkit-1/localauthority/50-local.d/50-libvirt-remote-access.pkla
+[libvirt Management Access]
+Identity=unix-group:libvirtd
+Action=org.libvirt.unix.manage
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes
+EOF'
+        LIBVIRT_DAEMON=libvirtd
+    fi
     # The user that nova runs as needs to be member of libvirtd group otherwise
     # nova-compute will be unable to use libvirt.
     sudo usermod -a -G libvirtd `whoami`
     # libvirt detects various settings on startup, as we potentially changed
     # the system configuration (modules, filesystems), we need to restart
     # libvirt to detect those changes.
-    restart_service libvirt-bin
+    restart_service $LIBVIRT_DAEMON
 
 
     # Instance Storage
@@ -1202,7 +1290,11 @@ if is_service_enabled swift; then
         s/%USER%/$USER/;
         s,%SWIFT_DATA_DIR%,$SWIFT_DATA_DIR,;
     " $FILES/swift/rsyncd.conf | sudo tee /etc/rsyncd.conf
-   sudo sed -i '/^RSYNC_ENABLE=false/ { s/false/true/ }' /etc/default/rsync
+    if [[ "$os_PACKAGE" = "deb" ]]; then
+        sudo sed -i '/^RSYNC_ENABLE=false/ { s/false/true/ }' /etc/default/rsync
+    else
+        sudo sed -i '/disable *= *yes/ { s/yes/no/ }' /etc/xinetd.d/rsync
+    fi
 
    # By default Swift will be installed with the tempauth middleware
    # which has some default username and password if you have
@@ -1267,10 +1359,10 @@ if is_service_enabled swift; then
    swift_log_dir=${SWIFT_DATA_DIR}/logs
    rm -rf ${swift_log_dir}
    mkdir -p ${swift_log_dir}/hourly
-   sudo chown -R syslog:adm ${swift_log_dir}
+   sudo chown -R $USER:adm ${swift_log_dir}
    sed "s,%SWIFT_LOGDIR%,${swift_log_dir}," $FILES/swift/rsyslog.conf | sudo \
        tee /etc/rsyslog.d/10-swift.conf
-   sudo restart rsyslog
+   restart_service rsyslog
 
    # This is where we create three different rings for swift with
    # different object servers binding on different ports.
@@ -1307,7 +1399,12 @@ if is_service_enabled swift; then
    sudo chmod +x /usr/local/bin/swift-*
 
    # We then can start rsync.
-   sudo /etc/init.d/rsync restart || :
+    if [[ "$os_PACKAGE" = "deb" ]]; then
+        sudo /etc/init.d/rsync restart || :
+    else
+	echo 'TODO - Start rsync'
+        # sudo systemctl start xinetd.service
+    fi
 
    # First spawn all the swift services then kill the
    # proxy service so we can run it in foreground in screen.
@@ -1332,9 +1429,6 @@ if is_service_enabled n-vol; then
     #
     # By default, the backing file is 2G in size, and is stored in /opt/stack.
 
-    # install the package
-    install_package tgt
-
     if ! sudo vgs $VOLUME_GROUP; then
         VOLUME_BACKING_FILE=${VOLUME_BACKING_FILE:-$DEST/nova-volumes-backing-file}
         VOLUME_BACKING_FILE_SIZE=${VOLUME_BACKING_FILE_SIZE:-2052M}
@@ -1357,10 +1451,16 @@ if is_service_enabled n-vol; then
         done
     fi
 
-    # tgt in oneiric doesn't restart properly if tgtd isn't running
-    # do it in two steps
-    sudo stop tgt || true
-    sudo start tgt
+    if [[ "$os_PACKAGE" = "deb" ]]; then
+        # tgt in oneiric doesn't restart properly if tgtd isn't running
+        # do it in two steps
+        sudo stop tgt || true
+        sudo start tgt
+    else
+        # bypass redirection to systemctl during restart
+        #sudo /sbin/service --skip-redirect tgtd restart
+      sudo /etc/init.d/tgtd restart
+    fi
 fi
 
 NOVA_CONF=nova.conf
@@ -1377,7 +1477,7 @@ add_nova_opt "[DEFAULT]"
 add_nova_opt "verbose=True"
 add_nova_opt "auth_strategy=keystone"
 add_nova_opt "allow_resize_to_same_host=True"
-add_nova_opt "root_helper=sudo /usr/local/bin/nova-rootwrap"
+add_nova_opt "root_helper=sudo $NOVA_ROOTWRAP"
 add_nova_opt "compute_scheduler_driver=$SCHEDULER"
 add_nova_opt "dhcpbridge_flagfile=$NOVA_CONF_DIR/$NOVA_CONF"
 add_nova_opt "fixed_range=$FIXED_RANGE"
@@ -1547,14 +1647,6 @@ if is_service_enabled key; then
     fi
 
     if [[ "$KEYSTONE_CONF_DIR" != "$KEYSTONE_DIR/etc" ]]; then
-        # FIXME(dtroyer): etc/keystone.conf causes trouble if the config files
-        #                 are located anywhere else (say, /etc/keystone).
-        #                 LP 966670 fixes this in keystone, we fix it
-        #                 here until the bug fix is committed.
-        if [[ -r $KEYSTONE_DIR/etc/keystone.conf ]]; then
-            # Get the sample config file out of the way
-            mv $KEYSTONE_DIR/etc/keystone.conf $KEYSTONE_DIR/etc/keystone.conf.sample
-        fi
         cp -p $KEYSTONE_DIR/etc/keystone.conf.sample $KEYSTONE_CONF
         cp -p $KEYSTONE_DIR/etc/policy.json $KEYSTONE_CONF_DIR
     fi
@@ -1669,7 +1761,7 @@ screen_it n-sch "cd $NOVA_DIR && $NOVA_DIR/bin/nova-scheduler"
 screen_it n-novnc "cd $NOVNC_DIR && ./utils/nova-novncproxy --config-file $NOVA_CONF_DIR/$NOVA_CONF --web ."
 screen_it n-xvnc "cd $NOVA_DIR && ./bin/nova-xvpvncproxy --config-file $NOVA_CONF_DIR/$NOVA_CONF"
 screen_it n-cauth "cd $NOVA_DIR && ./bin/nova-consoleauth"
-screen_it horizon "cd $HORIZON_DIR && sudo tail -f /var/log/apache2/error.log"
+screen_it horizon "cd $HORIZON_DIR && sudo tail -f /var/log/$APACHE_NAME/horizon_error.log"
 screen_it swift "cd $SWIFT_DIR && $SWIFT_DIR/bin/swift-proxy-server ${SWIFT_CONFIG_DIR}/proxy-server.conf -v"
 
 # Starting the nova-objectstore only if swift service is not enabled.
@@ -1699,7 +1791,7 @@ if is_service_enabled g-reg; then
 
     ADMIN_USER=admin
     ADMIN_TENANT=admin
-    TOKEN=`curl -s -d  "{\"auth\":{\"passwordCredentials\": {\"username\": \"$ADMIN_USER\", \"password\": \"$ADMIN_PASSWORD\"}, \"tenantName\": \"$ADMIN_TENANT\"}}" -H "Content-type: application/json" http://$HOST_IP:5000/v2.0/tokens | python -c "import sys; import json; tok = json.loads(sys.stdin.read()); print tok['access']['token']['id'];"`
+    TOKEN=`curl -s -d  "{\"auth\":{\"passwordCredentials\": {\"username\": \"$ADMIN_USER\", \"password\": \"$ADMIN_PASSWORD\"}, \"tenantName\": \"$ADMIN_TENANT\"}}" -H "Content-type: application/json" http://$KEYSTONE_SERVICE_HOST:5000/v2.0/tokens | python -c "import sys; import json; tok = json.loads(sys.stdin.read()); print tok['access']['token']['id'];"`
 
     # Option to upload legacy ami-tty, which works with xenserver
     if [[ -n "$UPLOAD_LEGACY_TTY" ]]; then
