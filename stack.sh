@@ -913,8 +913,8 @@ if is_service_enabled g-reg; then
     mkdir -p $GLANCE_IMAGE_DIR
 
     # (re)create glance database
-    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'DROP DATABASE IF EXISTS glance;'
-    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'CREATE DATABASE glance CHARACTER SET utf8;'
+    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -h $MYSQL_HOST -e 'DROP DATABASE IF EXISTS glance;'
+    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -h $MYSQL_HOST -e 'CREATE DATABASE glance CHARACTER SET utf8;'
 
     # Copy over our glance configurations and update them
     GLANCE_REGISTRY_CONF=$GLANCE_CONF_DIR/glance-registry.conf
@@ -985,8 +985,8 @@ if is_service_enabled q-svc; then
         fi
         # Create database for the plugin/agent
         if is_service_enabled mysql; then
-            mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'DROP DATABASE IF EXISTS ovs_quantum;'
-            mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'CREATE DATABASE IF NOT EXISTS ovs_quantum CHARACTER SET utf8;'
+            mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -h $MYSQL_HOST -e 'DROP DATABASE IF EXISTS ovs_quantum;'
+            mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -h $MYSQL_HOST -e 'CREATE DATABASE IF NOT EXISTS ovs_quantum CHARACTER SET utf8;'
         else
             echo "mysql must be enabled in order to use the $Q_PLUGIN Quantum plugin."
             exit 1
@@ -1030,8 +1030,8 @@ fi
 # Melange service
 if is_service_enabled m-svc; then
     if is_service_enabled mysql; then
-        mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'DROP DATABASE IF EXISTS melange;'
-        mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'CREATE DATABASE melange CHARACTER SET utf8;'
+        mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -h $MYSQL_HOST -e 'DROP DATABASE IF EXISTS melange;'
+        mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -h $MYSQL_HOST -e 'CREATE DATABASE melange CHARACTER SET utf8;'
     else
         echo "mysql must be enabled in order to use the $Q_PLUGIN Quantum plugin."
         exit 1
@@ -1602,8 +1602,8 @@ fi
 
 if is_service_enabled nova; then
     # (re)create nova database
-    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'DROP DATABASE IF EXISTS nova;'
-    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'CREATE DATABASE nova;'
+    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -h $MYSQL_HOST -e 'DROP DATABASE IF EXISTS nova;'
+    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -h $MYSQL_HOST -e 'CREATE DATABASE nova;'
 
     # (re)create nova database
     $NOVA_DIR/bin/nova-manage db sync
@@ -1634,8 +1634,8 @@ fi
 
 if is_service_enabled key; then
     # (re)create keystone database
-    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'DROP DATABASE IF EXISTS keystone;'
-    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'CREATE DATABASE keystone CHARACTER SET utf8;'
+    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -h $MYSQL_HOST -e 'DROP DATABASE IF EXISTS keystone;'
+    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -h $MYSQL_HOST -e 'CREATE DATABASE keystone CHARACTER SET utf8;'
 
     KEYSTONE_CONF_DIR=${KEYSTONE_CONF_DIR:-/etc/keystone}
     KEYSTONE_CONF=$KEYSTONE_CONF_DIR/keystone.conf
