@@ -637,7 +637,7 @@ if is_service_enabled swift; then
     # storage service
     git_clone $SWIFT_REPO $SWIFT_DIR $SWIFT_BRANCH
 fi
-if is_service_enabled g-api n-api; then
+if is_service_enabled g-api nova; then
     # image catalog service
     git_clone $GLANCE_REPO $GLANCE_DIR $GLANCE_BRANCH
 fi
@@ -679,7 +679,7 @@ fi
 if is_service_enabled swift; then
     cd $SWIFT_DIR; sudo python setup.py develop
 fi
-if is_service_enabled g-api n-api; then
+if is_service_enabled g-api nova; then
     cd $GLANCE_DIR; sudo python setup.py develop
 fi
 cd $NOVA_DIR; sudo python setup.py develop
