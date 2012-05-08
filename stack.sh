@@ -1087,9 +1087,9 @@ if is_service_enabled n-api; then
     # Remove legacy paste config if present
     rm -f $NOVA_DIR/bin/nova-api-paste.ini
 
-    NOVA_API_PASTE_INI=$NOVA_DIR/etc/nova/api-paste.ini
+    NOVA_API_PASTE_INI=$NOVA_CONF_DIR/api-paste.ini
     # Get the sample configuration file in place
-    cp $NOVA_API_PASTE_INI $NOVA_CONF_DIR
+    cp $NOVA_DIR/etc/nova/api-paste.ini $NOVA_CONF_DIR
 
     # Rewrite the authtoken configration for our Keystone service.
     # This is a bit defensive to allow the sample file some varaince.
