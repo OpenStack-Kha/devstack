@@ -1697,6 +1697,11 @@ if is_service_enabled key; then
     fi
 
     sudo sed -e "
+        s,%NAPI_HOST%,$NAPI_HOST,g;
+        s,%NOBJ_HOST%,$NOBJ_HOST,g;
+        s,%NVOL_HOST%,$NVOL_HOST,g;
+        s,%GLANCE_HOST%,$GLANCE_HOST,g;
+        s,%GLANCE_PORT%,$GLANCE_PORT,g;
         s,%SERVICE_HOST%,$SERVICE_HOST,g;
         s,%S3_SERVICE_PORT%,$S3_SERVICE_PORT,g;
     " -i $KEYSTONE_CATALOG
