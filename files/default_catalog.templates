@@ -6,31 +6,31 @@ catalog.RegionOne.identity.internalURL = http://%SERVICE_HOST%:$(public_port)s/v
 catalog.RegionOne.identity.name = Identity Service
 
 
-catalog.RegionOne.compute.publicURL = http://%SERVICE_HOST%:8774/v2/$(tenant_id)s
-catalog.RegionOne.compute.adminURL = http://%SERVICE_HOST%:8774/v2/$(tenant_id)s
-catalog.RegionOne.compute.internalURL = http://%SERVICE_HOST%:8774/v2/$(tenant_id)s
+catalog.RegionOne.compute.publicURL = http://%NAPI_HOST%:8774/v2/$(tenant_id)s
+catalog.RegionOne.compute.adminURL = http://%NAPI_HOST%:8774/v2/$(tenant_id)s
+catalog.RegionOne.compute.internalURL = http://%NAPI_HOST%:8774/v2/$(tenant_id)s
 catalog.RegionOne.compute.name = Compute Service
 
 
-catalog.RegionOne.volume.publicURL = http://%SERVICE_HOST%:8776/v1/$(tenant_id)s
-catalog.RegionOne.volume.adminURL = http://%SERVICE_HOST%:8776/v1/$(tenant_id)s
-catalog.RegionOne.volume.internalURL = http://%SERVICE_HOST%:8776/v1/$(tenant_id)s
+catalog.RegionOne.volume.publicURL = http://%NVOL_HOST%:8776/v1/$(tenant_id)s
+catalog.RegionOne.volume.adminURL = http://%NVOL_HOST%:8776/v1/$(tenant_id)s
+catalog.RegionOne.volume.internalURL = http://%NVOL_HOST%:8776/v1/$(tenant_id)s
 catalog.RegionOne.volume.name = Volume Service
 
 
-catalog.RegionOne.ec2.publicURL = http://%SERVICE_HOST%:8773/services/Cloud
-catalog.RegionOne.ec2.adminURL = http://%SERVICE_HOST%:8773/services/Admin
-catalog.RegionOne.ec2.internalURL = http://%SERVICE_HOST%:8773/services/Cloud
+catalog.RegionOne.ec2.publicURL = http://%NAPI_HOST%:8773/services/Cloud
+catalog.RegionOne.ec2.adminURL = http://%NAPI_HOST%:8773/services/Admin
+catalog.RegionOne.ec2.internalURL = http://%NAPI_HOST%:8773/services/Cloud
 catalog.RegionOne.ec2.name = EC2 Service
 
 
-catalog.RegionOne.s3.publicURL = http://%SERVICE_HOST%:%S3_SERVICE_PORT%
-catalog.RegionOne.s3.adminURL = http://%SERVICE_HOST%:%S3_SERVICE_PORT%
-catalog.RegionOne.s3.internalURL = http://%SERVICE_HOST%:%S3_SERVICE_PORT%
+catalog.RegionOne.s3.publicURL = http://%NOBJ_HOST%:%S3_SERVICE_PORT%
+catalog.RegionOne.s3.adminURL = http://%NOBJ_HOST%:%S3_SERVICE_PORT%
+catalog.RegionOne.s3.internalURL = http://%NOBJ_HOST%:%S3_SERVICE_PORT%
 catalog.RegionOne.s3.name = S3 Service
 
 
-catalog.RegionOne.image.publicURL = http://%SERVICE_HOST%:9292/v1
-catalog.RegionOne.image.adminURL = http://%SERVICE_HOST%:9292/v1
-catalog.RegionOne.image.internalURL = http://%SERVICE_HOST%:9292/v1
+catalog.RegionOne.image.publicURL = http://%GLANCE_HOST%:%GLANCE_PORT%/v1
+catalog.RegionOne.image.adminURL = http://%GLANCE_HOST%:%GLANCE_PORT%/v1
+catalog.RegionOne.image.internalURL = http://%GLANCE_HOST%:%GLANCE_PORT%/v1
 catalog.RegionOne.image.name = Image Service
