@@ -465,6 +465,8 @@ read_password ADMIN_PASSWORD "ENTER A PASSWORD TO USE FOR HORIZON AND KEYSTONE (
 
 # Set the tenant for service accounts in Keystone
 SERVICE_TENANT_NAME=${SERVICE_TENANT_NAME:-service}
+ADMIN_TENANT_NAME=${ADMIN_TENANT_NAME:-admin}
+ADMIN_USER_NAME=${ADMIN_USER_NAME:-admin}
 
 # Set Keystone interface configuration
 KEYSTONE_API_PORT=${KEYSTONE_API_PORT:-5000}
@@ -933,13 +935,16 @@ if is_service_enabled g-reg; then
 
     GLANCE_REGISTRY_PASTE_INI=$GLANCE_CONF_DIR/glance-registry-paste.ini
     cp $GLANCE_DIR/etc/glance-registry-paste.ini $GLANCE_REGISTRY_PASTE_INI
+    iniset $GLANCE_REGISTRY_PASTE_INI filter:authtoken service_host $KEYSTONE_SERVICE_HOST
+    iniset $GLANCE_REGISTRY_PASTE_INI filter:authtoken service_port $KEYSTONE_SERVICE_PORT
+    iniset $GLANCE_REGISTRY_PASTE_INI filter:authtoken service_protocol $KEYSTONE_SERVICE_PROTOCOL
     iniset $GLANCE_REGISTRY_PASTE_INI filter:authtoken auth_host $KEYSTONE_AUTH_HOST
     iniset $GLANCE_REGISTRY_PASTE_INI filter:authtoken auth_port $KEYSTONE_AUTH_PORT
     iniset $GLANCE_REGISTRY_PASTE_INI filter:authtoken auth_protocol $KEYSTONE_AUTH_PROTOCOL
     iniset $GLANCE_REGISTRY_PASTE_INI filter:authtoken auth_uri $KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_SERVICE_HOST:$KEYSTONE_SERVICE_PORT/
-    iniset $GLANCE_REGISTRY_PASTE_INI filter:authtoken admin_tenant_name $SERVICE_TENANT_NAME
-    iniset $GLANCE_REGISTRY_PASTE_INI filter:authtoken admin_user glance
-    iniset $GLANCE_REGISTRY_PASTE_INI filter:authtoken admin_password $SERVICE_PASSWORD
+    iniset $GLANCE_REGISTRY_PASTE_INI filter:authtoken admin_tenant_name $ADMIN_TENANT_NAME
+    iniset $GLANCE_REGISTRY_PASTE_INI filter:authtoken admin_user $ADMIN_USER_NAME
+    iniset $GLANCE_REGISTRY_PASTE_INI filter:authtoken admin_password $ADMIN_PASSWORD
 
     GLANCE_API_CONF=$GLANCE_CONF_DIR/glance-api.conf
     cp $GLANCE_DIR/etc/glance-api.conf $GLANCE_API_CONF
@@ -960,13 +965,16 @@ if is_service_enabled g-reg; then
 
     GLANCE_API_PASTE_INI=$GLANCE_CONF_DIR/glance-api-paste.ini
     cp $GLANCE_DIR/etc/glance-api-paste.ini $GLANCE_API_PASTE_INI
+    iniset $GLANCE_API_PASTE_INI filter:authtoken service_host $KEYSTONE_SERVICE_HOST
+    iniset $GLANCE_API_PASTE_INI filter:authtoken service_port $KEYSTONE_SERVICE_PORT
+    iniset $GLANCE_API_PASTE_INI filter:authtoken service_protocol $KEYSTONE_SERVICE_PROTOCOL
     iniset $GLANCE_API_PASTE_INI filter:authtoken auth_host $KEYSTONE_AUTH_HOST
     iniset $GLANCE_API_PASTE_INI filter:authtoken auth_port $KEYSTONE_AUTH_PORT
     iniset $GLANCE_API_PASTE_INI filter:authtoken auth_protocol $KEYSTONE_AUTH_PROTOCOL
     iniset $GLANCE_API_PASTE_INI filter:authtoken auth_uri $KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_SERVICE_HOST:$KEYSTONE_SERVICE_PORT/
-    iniset $GLANCE_API_PASTE_INI filter:authtoken admin_tenant_name $SERVICE_TENANT_NAME
-    iniset $GLANCE_API_PASTE_INI filter:authtoken admin_user glance
-    iniset $GLANCE_API_PASTE_INI filter:authtoken admin_password $SERVICE_PASSWORD
+    iniset $GLANCE_API_PASTE_INI filter:authtoken admin_tenant_name $ADMIN_TENANT_NAME
+    iniset $GLANCE_API_PASTE_INI filter:authtoken admin_user $ADMIN_USER_NAME
+    iniset $GLANCE_API_PASTE_INI filter:authtoken admin_password $ADMIN_PASSWORD
 fi
 
 # Quantum
@@ -1808,8 +1816,8 @@ if is_service_enabled g-reg; then
     # Create a directory for the downloaded image tarballs.
     mkdir -p $FILES/images
 
-    ADMIN_USER=admin
-    ADMIN_TENANT=admin
+    ADMIN_USER=$ADMIN_USER_NAME
+    ADMIN_TENANT=$ADMIN_TENANT_NAME
     TOKEN=`curl -s -d  "{\"auth\":{\"passwordCredentials\": {\"username\": \"$ADMIN_USER\", \"password\": \"$ADMIN_PASSWORD\"}, \"tenantName\": \"$ADMIN_TENANT\"}}" -H "Content-type: application/json" http://$KEYSTONE_SERVICE_HOST:5000/v2.0/tokens | python -c "import sys; import json; tok = json.loads(sys.stdin.read()); print tok['access']['token']['id'];"`
 
     # Option to upload legacy ami-tty, which works with xenserver
