@@ -1087,19 +1087,28 @@ if is_service_enabled n-api; then
     # Remove legacy paste config if present
     rm -f $NOVA_DIR/bin/nova-api-paste.ini
 
+    NOVA_API_PASTE_INI=$NOVA_DIR/etc/nova/api-paste.ini $NOVA_CONF_DIR
     # Get the sample configuration file in place
-    cp $NOVA_DIR/etc/nova/api-paste.ini $NOVA_CONF_DIR
+    cp $NOVA_API_PASTE_INI $NOVA_CONF_DIR
 
     # Rewrite the authtoken configration for our Keystone service.
     # This is a bit defensive to allow the sample file some varaince.
     sed -e "
-        /^admin_token/i admin_tenant_name = $SERVICE_TENANT_NAME
-        /admin_tenant_name/s/^.*$/admin_tenant_name = $SERVICE_TENANT_NAME/;
-        /admin_user/s/^.*$/admin_user = nova/;
-        /admin_password/s/^.*$/admin_password = $SERVICE_PASSWORD/;
-        s,%SERVICE_TENANT_NAME%,$SERVICE_TENANT_NAME,g;
-        s,%SERVICE_TOKEN%,$SERVICE_TOKEN,g;
-    " -i $NOVA_CONF_DIR/api-paste.ini
+        s,%SERVICE_TENANT_NAME%,$ADMIN_TENANT_NAME,g;
+        s,%SERVICE_USER%,$ADMIN_USER_NAME,g;
+        s,%SERVICE_PASSWORD%,$ADMIN_PASSWORD,g;
+    " -i $NOVA_API_PASTE_INI
+
+    iniset $NOVA_API_PASTE_INI filter:authtoken service_host $KEYSTONE_SERVICE_HOST
+    iniset $NOVA_API_PASTE_INI filter:authtoken service_port $KEYSTONE_SERVICE_PORT
+    iniset $NOVA_API_PASTE_INI filter:authtoken service_protocol $KEYSTONE_SERVICE_PROTOCOL
+    iniset $NOVA_API_PASTE_INI filter:authtoken auth_host $KEYSTONE_AUTH_HOST
+    iniset $NOVA_API_PASTE_INI filter:authtoken auth_port $KEYSTONE_AUTH_PORT
+    iniset $NOVA_API_PASTE_INI filter:authtoken auth_protocol $KEYSTONE_AUTH_PROTOCOL
+    iniset $NOVA_API_PASTE_INI filter:authtoken auth_uri $KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_SERVICE_HOST:$KEYSTONE_SERVICE_PORT/
+    iniset $NOVA_API_PASTE_INI filter:authtoken admin_tenant_name $ADMIN_TENANT_NAME
+    iniset $NOVA_API_PASTE_INI filter:authtoken admin_user $ADMIN_USER_NAME
+    iniset $NOVA_API_PASTE_INI filter:authtoken admin_password $ADMIN_PASSWORD
 fi
 
 # Helper to clean iptables rules
