@@ -397,6 +397,7 @@ BASE_SQL_CONN=${BASE_SQL_CONN:-mysql://$MYSQL_USER:$MYSQL_PASSWORD@$MYSQL_HOST}
 
 # Rabbit connection info
 RABBIT_HOST=${RABBIT_HOST:-localhost}
+RABBIT_ADDRESSES=${RABBIT_ADDRESSES:-$RABBIT_HOST:5672}
 read_password RABBIT_PASSWORD "ENTER A PASSWORD TO USE FOR RABBIT."
 
 # Glance connection info.  Note the port must be specified.
@@ -1564,7 +1565,7 @@ add_nova_opt "vncserver_proxyclient_address=$VNCSERVER_PROXYCLIENT_ADDRESS"
 add_nova_opt "api_paste_config=$NOVA_CONF_DIR/api-paste.ini"
 add_nova_opt "image_service=nova.image.glance.GlanceImageService"
 add_nova_opt "ec2_dmz_host=$EC2_DMZ_HOST"
-add_nova_opt "rabbit_host=$RABBIT_HOST"
+add_nova_opt "rabbit_addresses=$RABBIT_ADDRESSES"
 add_nova_opt "rabbit_password=$RABBIT_PASSWORD"
 add_nova_opt "glance_api_servers=$GLANCE_HOSTPORT"
 add_nova_opt "force_dhcp_release=True"
