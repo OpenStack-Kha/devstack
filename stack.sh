@@ -399,6 +399,7 @@ BASE_SQL_CONN=${BASE_SQL_CONN:-mysql://$MYSQL_USER:$MYSQL_PASSWORD@$MYSQL_HOST}
 RABBIT_HOST=${RABBIT_HOST:-localhost}
 RABBIT_ADDRESSES=${RABBIT_ADDRESSES:-$RABBIT_HOST:5672}
 read_password RABBIT_PASSWORD "ENTER A PASSWORD TO USE FOR RABBIT."
+RABBIT_MAX_RETRIES=${RABBIT_MAX_RETRIES:-13}
 
 # Glance connection info.  Note the port must be specified.
 GLANCE_HOSTPORT=${GLANCE_HOSTPORT:-$GLANCE_HOST:$GLANCE_PORT}
@@ -1567,6 +1568,7 @@ add_nova_opt "image_service=nova.image.glance.GlanceImageService"
 add_nova_opt "ec2_dmz_host=$EC2_DMZ_HOST"
 add_nova_opt "rabbit_addresses=$RABBIT_ADDRESSES"
 add_nova_opt "rabbit_password=$RABBIT_PASSWORD"
+add_nova_opt "rabbit_max_retries=$RABBIT_MAX_RETRIES"
 add_nova_opt "glance_api_servers=$GLANCE_HOSTPORT"
 add_nova_opt "force_dhcp_release=True"
 if [ -n "$INSTANCES_PATH" ]; then
