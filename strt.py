@@ -146,6 +146,9 @@ if "n-obj" in ENABLED_SERVICES:
 if "n-crt" in ENABLED_SERVICES:
     screen_it("n-crt","cd /opt/stack/nova && /opt/stack/nova/bin/nova-cert") 
 if "swift" in ENABLED_SERVICES:
- sp.call("mount /opt/stack/swift/data/drives/images/swift.img /opt/stack/swift/data/drives/sdb1 -o loop; cd /opt/stack/nova && /usr/bin/swift-init all start", shell=True)
+ sp.call("sudo mount -t xfs -o loop,noatime,nodiratime,nobarrier,logbufs=8 /opt/stack/data/swift/drives/images/swift.img /opt/stack/data/swift/drives/sdb1/; sudo swift-init all restart", shell=True)
 if "horizon" in ENABLED_SERVICES:
     screen_it("horizon","cd /opt/stack/horizon && sudo tail -f /var/log/httpd/horizon_error.log")
+if "llapi" in ENABLED_SERVICES:
+    screen_it("llapi","cd /opt/jade/low_level_api && sudo python manage.py runserver 0.0.0.0:8187")
+
