@@ -1776,7 +1776,7 @@ fi
 
 # If cinder is enabled, use the cinder volume driver
 if is_service_enabled cinder; then
-    add_nova_opt "volume_api_class=cinder.volume.api.API"
+    add_nova_opt "volume_api_class=nova.volume.cinder.API"
 fi
 
 # Provide some transition from EXTRA_FLAGS to EXTRA_OPTS
