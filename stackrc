@@ -18,15 +18,15 @@ ENABLED_SERVICES=g-api,g-reg,key,n-api,n-crt,n-obj,n-cpu,n-net,n-vol,n-sch,n-nov
 NOVA_ENABLED_APIS=ec2,osapi_compute,osapi_volume,metadata
 
 # volume service
-CINDER_REPO=https://github.com/openstack/cinder
-CINDER_BRANCH=master
+CINDER_REPO=git@github.com:OpenStack-Kha/cinder.git
+CINDER_BRANCH=cinder
 
 # volume client
 CINDERCLIENT_REPO=https://github.com/openstack/python-cinderclient
 CINDERCLIENT_BRANCH=master
 
 # compute service
-NOVA_REPO=https://github.com/OpenStack-Kha/nova.git
+NOVA_REPO=git@github.com:OpenStack-Kha/nova.git
 NOVA_BRANCH=cinder
 
 # storage service
