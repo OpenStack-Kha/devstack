@@ -1,0 +1,5 @@
+
+ENABLED_SERVICES+=,-n-vol,cinder,c-api,c-sch,c-vol
+VOLUME_GROUP=stack-volumes
+
+# HOST_IP=172.18.194.4
