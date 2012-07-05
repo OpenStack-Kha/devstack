@@ -19,7 +19,7 @@ NOVA_ENABLED_APIS=ec2,osapi_compute,osapi_volume,metadata
 
 # volume service
 CINDER_REPO=git@github.com:OpenStack-Kha/cinder.git
-CINDER_BRANCH=cinder
+CINDER_BRANCH=master
 
 # volume client
 CINDERCLIENT_REPO=https://github.com/openstack/python-cinderclient
@@ -27,7 +27,7 @@ CINDERCLIENT_BRANCH=master
 
 # compute service
 NOVA_REPO=git@github.com:OpenStack-Kha/nova.git
-NOVA_BRANCH=cinder
+NOVA_BRANCH=master
 
 # storage service
 SWIFT_REPO=https://github.com/openstack/swift.git
