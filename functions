@@ -263,10 +263,18 @@ function git_clone {
             # (due to the py files having older timestamps than our pyc, so python
             # thinks the pyc files are correct using them)
             find $GIT_DEST -name '*.pyc' -delete
-            git checkout -f origin/$GIT_BRANCH
-            # a local branch might not exist
-            git branch -D $GIT_BRANCH || true
-            git checkout -b $GIT_BRANCH
+            if [[ -n "`git show-ref --tags $GIT_BRANCH`" ]]; then
+		# updating as a tag
+                git tag -d $GIT_BRANCH
+                git fetch origin tag $GIT_BRANCH
+                git checkout -f $GIT_BRANCH
+            else 
+                # updating as a branch
+                git checkout -f origin/$GIT_BRANCH
+                # a local branch might not exist
+                git branch -D $GIT_BRANCH || true
+                git checkout -b $GIT_BRANCH
+            fi
         fi
     fi
 }
