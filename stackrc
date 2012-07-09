@@ -19,7 +19,7 @@ NOVA_ENABLED_APIS=ec2,osapi_compute,osapi_volume,metadata
 
 # volume service
 CINDER_REPO=git@github.com:OpenStack-Kha/cinder.git
-CINDER_BRANCH=master
+CINDER_BRANCH=folsom-2
 
 # volume client
 CINDERCLIENT_REPO=https://github.com/openstack/python-cinderclient
@@ -27,7 +27,7 @@ CINDERCLIENT_BRANCH=master
 
 # compute service
 NOVA_REPO=git@github.com:OpenStack-Kha/nova.git
-NOVA_BRANCH=master
+NOVA_BRANCH=folsom-2
 
 # storage service
 SWIFT_REPO=https://github.com/openstack/swift.git
@@ -42,7 +42,7 @@ SWIFTCLIENT_BRANCH=master
 
 # image catalog service
 GLANCE_REPO=https://github.com/openstack/glance.git
-GLANCE_BRANCH=master
+GLANCE_BRANCH=folsom-2
 
 # python glance client library
 GLANCECLIENT_REPO=https://github.com/openstack/python-glanceclient
@@ -50,7 +50,7 @@ GLANCECLIENT_BRANCH=master
 
 # unified auth system (manages accounts/tokens)
 KEYSTONE_REPO=https://github.com/openstack/keystone.git
-KEYSTONE_BRANCH=master
+KEYSTONE_BRANCH=folsom-2
 
 # a websockets/html5 or flash powered VNC console for vm instances
 NOVNC_REPO=https://github.com/kanaka/noVNC.git
@@ -58,7 +58,7 @@ NOVNC_BRANCH=master
 
 # django powered web control panel for openstack
 HORIZON_REPO=https://github.com/openstack/horizon.git
-HORIZON_BRANCH=master
+HORIZON_BRANCH=folsom-2
 
 # python client library to nova that horizon (and others) use
 NOVACLIENT_REPO=https://github.com/openstack/python-novaclient.git
@@ -78,7 +78,7 @@ QUANTUM_BRANCH=master
 
 # quantum client
 QUANTUM_CLIENT_REPO=https://github.com/openstack/python-quantumclient
-QUANTUM_CLIENT_BRANCH=master
+QUANTUM_CLIENT_BRANCH=folsom-2
 
 # Tempest test suite
 TEMPEST_REPO=https://github.com/openstack/tempest.git
