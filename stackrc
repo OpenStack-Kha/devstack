@@ -49,7 +49,7 @@ GLANCE_BRANCH=folsom-2
 
 # python glance client library
 GLANCECLIENT_REPO=https://github.com/openstack/python-glanceclient
-GLANCECLIENT_BRANCH=master
+GLANCECLIENT_BRANCH=cf8613e76d4682c924a900a17b43197d569d7ad3
 
 # unified auth system (manages accounts/tokens)
 KEYSTONE_REPO=https://github.com/openstack/keystone.git
