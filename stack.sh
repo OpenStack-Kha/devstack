@@ -26,19 +26,8 @@ source $TOP_DIR/functions
 
 # Determine what system we are running on.  This provides ``os_VENDOR``,
 # ``os_RELEASE``, ``os_UPDATE``, ``os_PACKAGE``, ``os_CODENAME``
-GetOSVersion
-
-# Translate the OS version values into common nomenclature
-if [[ "$os_VENDOR" =~ (Ubuntu) ]]; then
-    # 'Everyone' refers to Ubuntu releases by the code name adjective
-    DISTRO=$os_CODENAME
-elif [[ "$os_VENDOR" =~ (Fedora) ]]; then
-    # For Fedora, just use 'f' and the release
-    DISTRO="f$os_RELEASE"
-else
-    # Catch-all for now is Vendor + Release + Update
-    DISTRO="$os_VENDOR-$os_RELEASE.$os_UPDATE"
-fi
+# and ``DISTRO``
+GetDistro
 
 
 # Settings
@@ -89,20 +78,15 @@ DEST=${DEST:-/opt/stack}
 # Sanity Check
 # ============
 
-# We are looking for services with a - at the beginning to force
-# excluding those services. For example if you want to install all the default
-# services but not nova-volume (n-vol) you can have this set in your localrc :
-# ENABLED_SERVICES+=",-n-vol"
-for service in ${ENABLED_SERVICES//,/ }; do
-    if [[ ${service} == -* ]]; then
-        ENABLED_SERVICES=$(echo ${ENABLED_SERVICES}|sed -r "s/(,)?(-)?${service#-}(,)?/,/g")
-    fi
-done
+# Remove services which were negated in ENABLED_SERVICES
+# using the "-" prefix (e.g., "-n-vol") instead of
+# calling disable_service().
+disable_negated_services
 
 # Warn users who aren't on an explicitly supported distro, but allow them to
 # override check and attempt installation with ``FORCE=yes ./stack``
-if [[ ! ${DISTRO} =~ (oneiric|precise|quantal|f16) ]]; then
-    echo "WARNING: this script has been tested on oneiric, precise and f16"
+if [[ ! ${DISTRO} =~ (oneiric|precise|quantal|f16|f17) ]]; then
+    echo "WARNING: this script has not been tested on $DISTRO"
     if [[ "$FORCE" != "yes" ]]; then
         echo "If you wish to run this script anyway run with FORCE=yes"
         exit 1
@@ -269,6 +253,13 @@ Q_PLUGIN=${Q_PLUGIN:-openvswitch}
 Q_PORT=${Q_PORT:-9696}
 # Default Quantum Host
 Q_HOST=${Q_HOST:-localhost}
+# Which Quantum API nova should use
+NOVA_USE_QUANTUM_API=${NOVA_USE_QUANTUM_API:-v1}
+# Default admin username
+Q_ADMIN_USERNAME=${Q_ADMIN_USERNAME:-quantum}
+# Default auth strategy
+Q_AUTH_STRATEGY=${Q_AUTH_STRATEGY:-keystone}
+
 
 # Default Melange Port
 M_PORT=${M_PORT:-9898}
@@ -380,6 +371,7 @@ PUBLIC_INTERFACE=${PUBLIC_INTERFACE:-$PUBLIC_INTERFACE_DEFAULT}
 PUBLIC_INTERFACE=${PUBLIC_INTERFACE:-br100}
 FIXED_RANGE=${FIXED_RANGE:-10.0.0.0/24}
 FIXED_NETWORK_SIZE=${FIXED_NETWORK_SIZE:-256}
+NETWORK_GATEWAY=${NETWORK_GATEWAY:-10.0.0.1}
 FLOATING_RANGE=${FLOATING_RANGE:-172.24.4.224/28}
 NET_MAN=${NET_MAN:-FlatDHCPManager}
 EC2_DMZ_HOST=${EC2_DMZ_HOST:-$SERVICE_HOST}
@@ -694,6 +686,8 @@ fi
 if is_service_enabled swift; then
     setup_develop $SWIFT_DIR
     setup_develop $SWIFTCLIENT_DIR
+fi
+if is_service_enabled swift3; then
     setup_develop $SWIFT3_DIR
 fi
 if is_service_enabled g-api n-api; then
@@ -1028,7 +1022,11 @@ if is_service_enabled quantum; then
         Q_PLUGIN_CONF_PATH=etc/quantum/plugins/openvswitch
         Q_PLUGIN_CONF_FILENAME=ovs_quantum_plugin.ini
         Q_DB_NAME="ovs_quantum"
-        Q_PLUGIN_CLASS="quantum.plugins.openvswitch.ovs_quantum_plugin.OVSQuantumPlugin"
+        if [[ "$NOVA_USE_QUANTUM_API" = "v1" ]]; then
+            Q_PLUGIN_CLASS="quantum.plugins.openvswitch.ovs_quantum_plugin.OVSQuantumPlugin"
+        elif [[ "$NOVA_USE_QUANTUM_API" = "v2" ]]; then
+            Q_PLUGIN_CLASS="quantum.plugins.openvswitch.ovs_quantum_plugin.OVSQuantumPluginV2"
+        fi
     elif [[ "$Q_PLUGIN" = "linuxbridge" ]]; then
         # Install deps
         # FIXME add to files/apts/quantum, but don't install if not needed!
@@ -1036,7 +1034,11 @@ if is_service_enabled quantum; then
         Q_PLUGIN_CONF_PATH=etc/quantum/plugins/linuxbridge
         Q_PLUGIN_CONF_FILENAME=linuxbridge_conf.ini
         Q_DB_NAME="quantum_linux_bridge"
-        Q_PLUGIN_CLASS="quantum.plugins.linuxbridge.LinuxBridgePlugin.LinuxBridgePlugin"
+        if [[ "$NOVA_USE_QUANTUM_API" = "v1" ]]; then
+            Q_PLUGIN_CLASS="quantum.plugins.linuxbridge.LinuxBridgePlugin.LinuxBridgePlugin"
+        elif [[ "$NOVA_USE_QUANTUM_API" = "v2" ]]; then
+            Q_PLUGIN_CLASS="quantum.plugins.linuxbridge.lb_quantum_plugin.LinuxBridgePluginV2"
+        fi
     else
         echo "Unknown Quantum plugin '$Q_PLUGIN'.. exiting"
         exit 1
@@ -1060,6 +1062,12 @@ if is_service_enabled quantum; then
         fi
         sudo sed -i -e "s/.*enable_tunneling = .*$/enable_tunneling = $OVS_ENABLE_TUNNELING/g" /$Q_PLUGIN_CONF_FILE
     fi
+
+    if [[ "$NOVA_USE_QUANTUM_API" = "v1" ]]; then
+        iniset /$Q_PLUGIN_CONF_FILE AGENT target_v2_api False
+    elif [[ "$NOVA_USE_QUANTUM_API" = "v2" ]]; then
+        iniset /$Q_PLUGIN_CONF_FILE AGENT target_v2_api True
+    fi
 fi
 
 # Quantum service (for controller node)
@@ -1069,15 +1077,15 @@ if is_service_enabled q-svc; then
     Q_POLICY_FILE=/etc/quantum/policy.json
 
     if [[ -e $QUANTUM_DIR/etc/quantum.conf ]]; then
-      sudo mv $QUANTUM_DIR/etc/quantum.conf $Q_CONF_FILE
+      sudo cp $QUANTUM_DIR/etc/quantum.conf $Q_CONF_FILE
     fi
 
     if [[ -e $QUANTUM_DIR/etc/api-paste.ini ]]; then
-      sudo mv $QUANTUM_DIR/etc/api-paste.ini $Q_API_PASTE_FILE
+      sudo cp $QUANTUM_DIR/etc/api-paste.ini $Q_API_PASTE_FILE
     fi
 
     if [[ -e $QUANTUM_DIR/etc/policy.json ]]; then
-      sudo mv $QUANTUM_DIR/etc/policy.json $Q_POLICY_FILE
+      sudo cp $QUANTUM_DIR/etc/policy.json $Q_POLICY_FILE
     fi
 
     if is_service_enabled mysql; then
@@ -1115,17 +1123,48 @@ if is_service_enabled q-agt; then
         sudo ovs-vsctl --no-wait add-br $OVS_BRIDGE
         sudo ovs-vsctl --no-wait br-set-external-id $OVS_BRIDGE bridge-id br-int
         sudo sed -i -e "s/.*local_ip = .*/local_ip = $HOST_IP/g" /$Q_PLUGIN_CONF_FILE
-        AGENT_BINARY=$QUANTUM_DIR/quantum/plugins/openvswitch/agent/ovs_quantum_agent.py
+        AGENT_BINARY="$QUANTUM_DIR/quantum/plugins/openvswitch/agent/ovs_quantum_agent.py"
     elif [[ "$Q_PLUGIN" = "linuxbridge" ]]; then
        # Start up the quantum <-> linuxbridge agent
        install_package bridge-utils
         #set the default network interface
        QUANTUM_LB_PRIVATE_INTERFACE=${QUANTUM_LB_PRIVATE_INTERFACE:-$GUEST_INTERFACE_DEFAULT}
        sudo sed -i -e "s/^physical_interface = .*$/physical_interface = $QUANTUM_LB_PRIVATE_INTERFACE/g" /$Q_PLUGIN_CONF_FILE
-       AGENT_BINARY=$QUANTUM_DIR/quantum/plugins/linuxbridge/agent/linuxbridge_quantum_agent.py
+       AGENT_BINARY="$QUANTUM_DIR/quantum/plugins/linuxbridge/agent/linuxbridge_quantum_agent.py"
     fi
     # Start up the quantum agent
     screen_it q-agt "sudo python $AGENT_BINARY /$Q_PLUGIN_CONF_FILE -v"
+fi
+
+# Quantum DHCP
+if is_service_enabled q-dhcp; then
+    AGENT_DHCP_BINARY="$QUANTUM_DIR/bin/quantum-dhcp-agent"
+
+    Q_DHCP_CONF_FILE=/etc/quantum/dhcp_agent.ini
+
+    if [[ -e $QUANTUM_DIR/etc/dhcp_agent.ini ]]; then
+      sudo cp $QUANTUM_DIR/etc/dhcp_agent.ini $Q_DHCP_CONF_FILE
+    fi
+
+    # Set verbose
+    iniset $Q_DHCP_CONF_FILE DEFAULT verbose True
+    # Set debug
+    iniset $Q_DHCP_CONF_FILE DEFAULT debug True
+
+    # Update database
+    iniset $Q_DHCP_CONF_FILE DEFAULT db_connection "mysql:\/\/$MYSQL_USER:$MYSQL_PASSWORD@$MYSQL_HOST\/$Q_DB_NAME?charset=utf8"
+    iniset $Q_DHCP_CONF_FILE DEFAULT auth_url "$KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_AUTH_HOST:$KEYSTONE_AUTH_PORT/v2.0"
+    iniset $Q_DHCP_CONF_FILE DEFAULT admin_tenant_name $SERVICE_TENANT_NAME
+    iniset $Q_DHCP_CONF_FILE DEFAULT admin_user $Q_ADMIN_USERNAME
+    iniset $Q_DHCP_CONF_FILE DEFAULT admin_password $SERVICE_PASSWORD
+
+    if [[ "$Q_PLUGIN" = "openvswitch" ]]; then
+        iniset $Q_DHCP_CONF_FILE DEFAULT interface_driver quantum.agent.linux.interface.OVSInterfaceDriver
+    elif [[ "$Q_PLUGIN" = "linuxbridge" ]]; then
+        iniset $Q_DHCP_CONF_FILE DEFAULT interface_driver quantum.agent.linux.interface.BridgeInterfaceDriver
+    fi
+    # Start up the quantum agent
+    screen_it q-dhcp "sudo python $AGENT_DHCP_BINARY --config-file=$Q_DHCP_CONF_FILE"
 fi
 
 # Melange service
@@ -1379,7 +1418,7 @@ if is_service_enabled swift; then
     install_package memcached
 
     # We make sure to kill all swift processes first
-    pkill -f -9 swift-
+    swift-init all stop || true
 
     # We first do a bit of setup by creating the directories and
     # changing the permissions so we can run it as our user.
@@ -1506,6 +1545,7 @@ auth_uri = ${KEYSTONE_SERVICE_PROTOCOL}://${KEYSTONE_SERVICE_HOST}:${KEYSTONE_SE
 admin_tenant_name = ${SERVICE_TENANT_NAME}
 admin_user = swift
 admin_password = ${SERVICE_PASSWORD}
+delay_auth_decision = 1
 EOF
     if is_service_enabled swift3;then
         cat <<EOF>>${SWIFT_CONFIG_PROXY_SERVER}
@@ -1643,11 +1683,10 @@ elif is_service_enabled n-vol; then
     # volume group, create your own volume group called ``stack-volumes`` before
     # invoking ``stack.sh``.
     #
-    # By default, the backing file is 2G in size, and is stored in ``/opt/stack/data``.
+    # By default, the backing file is 5G in size, and is stored in ``/opt/stack/data``.
 
     if ! sudo vgs $VOLUME_GROUP; then
         VOLUME_BACKING_FILE=${VOLUME_BACKING_FILE:-$DATA_DIR/${VOLUME_GROUP}-backing-file}
-        VOLUME_BACKING_FILE_SIZE=${VOLUME_BACKING_FILE_SIZE:-2052M}
         # Only create if the file doesn't already exists
         [[ -f $VOLUME_BACKING_FILE ]] || truncate -s $VOLUME_BACKING_FILE_SIZE $VOLUME_BACKING_FILE
         DEV=`sudo losetup -f --show $VOLUME_BACKING_FILE`
@@ -1656,6 +1695,11 @@ elif is_service_enabled n-vol; then
     fi
 
     if sudo vgs $VOLUME_GROUP; then
+        if [[ "$os_PACKAGE" = "rpm" ]]; then
+            # RPM doesn't start the service
+            start_service tgtd
+        fi
+
         # Remove nova iscsi targets
         sudo tgtadm --op show --mode target | grep $VOLUME_NAME_PREFIX | grep Target | cut -f3 -d ' ' | sudo xargs -n1 tgt-admin --delete || true
         # Clean out existing volumes
@@ -1673,8 +1717,7 @@ elif is_service_enabled n-vol; then
         sudo stop tgt || true
         sudo start tgt
     else
-        # bypass redirection to systemctl during restart
-        sudo /sbin/service --skip-redirect tgtd restart
+        restart_service tgtd
     fi
 fi
 
@@ -1699,15 +1742,27 @@ add_nova_opt "fixed_range=$FIXED_RANGE"
 add_nova_opt "s3_host=$SERVICE_HOST"
 add_nova_opt "s3_port=$S3_SERVICE_PORT"
 if is_service_enabled quantum; then
-    add_nova_opt "network_manager=nova.network.quantum.manager.QuantumManager"
-    add_nova_opt "quantum_connection_host=$Q_HOST"
-    add_nova_opt "quantum_connection_port=$Q_PORT"
+    if [[ "$NOVA_USE_QUANTUM_API" = "v1" ]]; then
+        add_nova_opt "network_manager=nova.network.quantum.manager.QuantumManager"
+        add_nova_opt "quantum_connection_host=$Q_HOST"
+        add_nova_opt "quantum_connection_port=$Q_PORT"
+        add_nova_opt "quantum_use_dhcp=True"
 
-    if is_service_enabled melange; then
-        add_nova_opt "quantum_ipam_lib=nova.network.quantum.melange_ipam_lib"
-        add_nova_opt "use_melange_mac_generation=True"
-        add_nova_opt "melange_host=$M_HOST"
-        add_nova_opt "melange_port=$M_PORT"
+        if is_service_enabled melange; then
+            add_nova_opt "quantum_ipam_lib=nova.network.quantum.melange_ipam_lib"
+            add_nova_opt "use_melange_mac_generation=True"
+            add_nova_opt "melange_host=$M_HOST"
+            add_nova_opt "melange_port=$M_PORT"
+        fi
+
+    elif [[ "$NOVA_USE_QUANTUM_API" = "v2" ]]; then
+        add_nova_opt "network_api_class=nova.network.quantumv2.api.API"
+        add_nova_opt "quantum_admin_username=$Q_ADMIN_USERNAME"
+        add_nova_opt "quantum_admin_password=$SERVICE_PASSWORD"
+        add_nova_opt "quantum_admin_auth_url=$KEYSTONE_SERVICE_PROTOCOL://$KEYSTONE_SERVICE_HOST:$KEYSTONE_AUTH_PORT/v2.0"
+        add_nova_opt "quantum_auth_strategy=$Q_AUTH_STRATEGY"
+        add_nova_opt "quantum_admin_tenant_name=$SERVICE_TENANT_NAME"
+        add_nova_opt "quantum_url=http://$Q_HOST:$Q_PORT"
     fi
 
     if [[ "$Q_PLUGIN" = "openvswitch" ]]; then
@@ -1720,7 +1775,6 @@ if is_service_enabled quantum; then
     add_nova_opt "libvirt_vif_type=ethernet"
     add_nova_opt "libvirt_vif_driver=$NOVA_VIF_DRIVER"
     add_nova_opt "linuxnet_interface_driver=$LINUXNET_VIF_DRIVER"
-    add_nova_opt "quantum_use_dhcp=True"
 else
     add_nova_opt "network_manager=nova.network.manager.$NET_MAN"
 fi
@@ -1818,7 +1872,7 @@ done
 
 if [ "$VIRT_DRIVER" = 'xenserver' ]; then
     read_password XENAPI_PASSWORD "ENTER A PASSWORD TO USE FOR XEN."
-    add_nova_opt "connection_type=xenapi"
+    add_nova_opt "compute_driver=xenapi.XenAPIDriver"
     XENAPI_CONNECTION_URL=${XENAPI_CONNECTION_URL:-"http://169.254.0.1"}
     XENAPI_USER=${XENAPI_USER:-"root"}
     add_nova_opt "xenapi_connection_url=$XENAPI_CONNECTION_URL"
@@ -1829,7 +1883,7 @@ if [ "$VIRT_DRIVER" = 'xenserver' ]; then
     XEN_FIREWALL_DRIVER=${XEN_FIREWALL_DRIVER:-"nova.virt.firewall.IptablesFirewallDriver"}
     add_nova_opt "firewall_driver=$XEN_FIREWALL_DRIVER"
 else
-    add_nova_opt "connection_type=libvirt"
+    add_nova_opt "compute_driver=libvirt.LibvirtDriver"
     LIBVIRT_FIREWALL_DRIVER=${LIBVIRT_FIREWALL_DRIVER:-"nova.virt.libvirt.firewall.IptablesFirewallDriver"}
     add_nova_opt "firewall_driver=$LIBVIRT_FIREWALL_DRIVER"
 fi
@@ -1919,9 +1973,9 @@ if is_service_enabled key; then
 
         # Add quantum endpoints to service catalog if quantum is enabled
         if is_service_enabled quantum; then
-            echo "catalog.RegionOne.network.publicURL = http://%SERVICE_HOST%:9696/" >> $KEYSTONE_CATALOG
-            echo "catalog.RegionOne.network.adminURL = http://%SERVICE_HOST%:9696/" >> $KEYSTONE_CATALOG
-            echo "catalog.RegionOne.network.internalURL = http://%SERVICE_HOST%:9696/" >> $KEYSTONE_CATALOG
+            echo "catalog.RegionOne.network.publicURL = http://%SERVICE_HOST%:$Q_PORT/" >> $KEYSTONE_CATALOG
+            echo "catalog.RegionOne.network.adminURL = http://%SERVICE_HOST%:$Q_PORT/" >> $KEYSTONE_CATALOG
+            echo "catalog.RegionOne.network.internalURL = http://%SERVICE_HOST%:$Q_PORT/" >> $KEYSTONE_CATALOG
             echo "catalog.RegionOne.network.name = Quantum Service" >> $KEYSTONE_CATALOG
         fi
 
@@ -1947,6 +2001,8 @@ if is_service_enabled key; then
 
     # Initialize keystone database
     $KEYSTONE_DIR/bin/keystone-manage db_sync
+    # set up certificates
+    $KEYSTONE_DIR/bin/keystone-manage pki_setup
 
     # launch keystone and wait for it to answer before continuing
     screen_it key "cd $KEYSTONE_DIR && $KEYSTONE_DIR/bin/keystone-all --config-file $KEYSTONE_CONF $KEYSTONE_LOG_CONFIG -d --debug"
@@ -1963,7 +2019,7 @@ if is_service_enabled key; then
     SERVICE_TOKEN=$SERVICE_TOKEN SERVICE_ENDPOINT=$SERVICE_ENDPOINT SERVICE_HOST=$SERVICE_HOST \
     S3_SERVICE_PORT=$S3_SERVICE_PORT KEYSTONE_CATALOG_BACKEND=$KEYSTONE_CATALOG_BACKEND \
     DEVSTACK_DIR=$TOP_DIR ENABLED_SERVICES=$ENABLED_SERVICES \
-        bash $FILES/keystone_data.sh
+        bash -x $FILES/keystone_data.sh
 
     # Set up auth creds now that keystone is bootstrapped
     export OS_AUTH_URL=$SERVICE_ENDPOINT
@@ -1998,14 +2054,24 @@ fi
 # If we're using Quantum (i.e. q-svc is enabled), network creation has to
 # happen after we've started the Quantum service.
 if is_service_enabled mysql && is_service_enabled nova; then
-    # Create a small network
-    $NOVA_DIR/bin/nova-manage network create private $FIXED_RANGE 1 $FIXED_NETWORK_SIZE $NETWORK_CREATE_ARGS
+    if [[ "$NOVA_USE_QUANTUM_API" = "v1" ]]; then
+        # Create a small network
+        $NOVA_DIR/bin/nova-manage network create private $FIXED_RANGE 1 $FIXED_NETWORK_SIZE $NETWORK_CREATE_ARGS
 
-    # Create some floating ips
-    $NOVA_DIR/bin/nova-manage floating create $FLOATING_RANGE
+        # Create some floating ips
+        $NOVA_DIR/bin/nova-manage floating create $FLOATING_RANGE
 
-    # Create a second pool
-    $NOVA_DIR/bin/nova-manage floating create --ip_range=$TEST_FLOATING_RANGE --pool=$TEST_FLOATING_POOL
+        # Create a second pool
+        $NOVA_DIR/bin/nova-manage floating create --ip_range=$TEST_FLOATING_RANGE --pool=$TEST_FLOATING_POOL
+    elif [[ "$NOVA_USE_QUANTUM_API" = "v2" ]]; then
+        TENANT_ID=$(keystone tenant-list | grep " demo " | get_field 1)
+
+        # Create a small network
+        NET_ID=$(quantum net-create --os_token $Q_ADMIN_USERNAME --os_url http://$Q_HOST:$Q_PORT --tenant_id $TENANT_ID net1 | grep ' id ' | get_field 2)
+
+        # Create a subnet
+        quantum subnet-create --os_token $Q_ADMIN_USERNAME --os_url http://$Q_HOST:$Q_PORT --tenant_id $TENANT_ID --ip_version 4 --gateway  $NETWORK_GATEWAY $NET_ID $FIXED_RANGE
+    fi
 fi
 
 # Launching nova-compute should be as simple as running ``nova-compute`` but
