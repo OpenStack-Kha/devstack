@@ -1,3 +1,4 @@
+# -*- mode: Shell-script -*-
 # functions - Common functions used by DevStack components
 #
 # ENABLED_SERVICES is used by is_service_enabled()
@@ -247,6 +248,24 @@ function git_update_tag() {
 }
 
 
+# Translate the OS version values into common nomenclature
+# Sets ``DISTRO`` from the ``os_*`` values
+function GetDistro() {
+    GetOSVersion
+    if [[ "$os_VENDOR" =~ (Ubuntu) ]]; then
+        # 'Everyone' refers to Ubuntu releases by the code name adjective
+        DISTRO=$os_CODENAME
+    elif [[ "$os_VENDOR" =~ (Fedora) ]]; then
+        # For Fedora, just use 'f' and the release
+        DISTRO="f$os_RELEASE"
+    else
+        # Catch-all for now is Vendor + Release + Update
+        DISTRO="$os_VENDOR-$os_RELEASE.$os_UPDATE"
+    fi
+    export DISTRO
+}
+
+
 # git clone only if directory doesn't exist already.  Since ``DEST`` might not
 # be owned by the installation user, we create the directory and change the
 # ownership to the proper user.
@@ -380,6 +399,76 @@ function is_service_enabled() {
     return 1
 }
 
+# remove extra commas from the input string (ENABLED_SERVICES)
+function _cleanup_service_list () {
+	echo "$1" | sed -e '
+        s/,,/,/g;
+        s/^,//;
+        s/,$//
+    '
+}
+
+# enable_service() adds the services passed as argument to the
+# **ENABLED_SERVICES** list, if they are not already present.
+#
+# For example:
+#
+#   enable_service n-vol
+#
+# This function does not know about the special cases
+# for nova, glance, and quantum built into is_service_enabled().
+function enable_service() {
+    local tmpsvcs="${ENABLED_SERVICES}"
+    for service in $@; do
+        if ! is_service_enabled $service; then
+            tmpsvcs+=",$service"
+        fi
+    done
+    ENABLED_SERVICES=$(_cleanup_service_list "$tmpsvcs")
+    disable_negated_services
+}
+
+# disable_service() removes the services passed as argument to the
+# **ENABLED_SERVICES** list, if they are present.
+#
+# For example:
+#
+#   disable_service n-vol
+#
+# This function does not know about the special cases
+# for nova, glance, and quantum built into is_service_enabled().
+function disable_service() {
+    local tmpsvcs=",${ENABLED_SERVICES},"
+    local service
+    for service in $@; do
+        if is_service_enabled $service; then
+            tmpsvcs=${tmpsvcs//,$service,/,}
+        fi
+    done
+    ENABLED_SERVICES=$(_cleanup_service_list "$tmpsvcs")
+}
+
+# disable_all_services() removes all current services
+# from **ENABLED_SERVICES** to reset the configuration
+# before a minimal installation
+function disable_all_services() {
+    ENABLED_SERVICES=""
+}
+
+# We are looking for services with a - at the beginning to force
+# excluding those services. For example if you want to install all the default
+# services but not nova-volume (n-vol) you can have this set in your localrc :
+# ENABLED_SERVICES+=",-n-vol"
+function disable_negated_services() {
+    local tmpsvcs="${ENABLED_SERVICES}"
+    local service
+    for service in ${tmpsvcs//,/ }; do
+        if [[ ${service} == -* ]]; then
+            tmpsvcs=$(echo ${tmpsvcs}|sed -r "s/(,)?(-)?${service#-}(,)?/,/g")
+        fi
+    done
+    ENABLED_SERVICES=$(_cleanup_service_list "$tmpsvcs")
+}
 
 # Distro-agnostic package installer
 # install_package package [package ...]
@@ -418,7 +507,7 @@ function pip_install {
     else
         CMD_PIP=/usr/bin/pip-python
     fi
-    sudo PIP_DOWNLOAD_CACHE=/var/cache/pip \
+    sudo PIP_DOWNLOAD_CACHE=${PIP_DOWNLOAD_CACHE:-/var/cache/pip} \
         HTTP_PROXY=$http_proxy \
         HTTPS_PROXY=$https_proxy \
         $CMD_PIP install --use-mirrors $@
