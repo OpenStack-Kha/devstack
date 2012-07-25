@@ -1225,7 +1225,7 @@ if [[ -d $NOVA_DIR/etc/nova/rootwrap.d ]]; then
     ROOTWRAP_SUDOER_CMD="$NOVA_ROOTWRAP *"
 fi
 
-# Set up the rootwrap sudoers
+# Set up the rootwrap sudoers for nova
 TEMPFILE=`mktemp`
 echo "$USER ALL=(root) NOPASSWD: $ROOTWRAP_SUDOER_CMD" >$TEMPFILE
 chmod 0440 $TEMPFILE
@@ -1495,7 +1495,7 @@ if is_service_enabled swift; then
     if is_service_enabled swift3;then
         swift_auth_server="s3token "
     fi
-        
+
     # By default Swift will be installed with the tempauth middleware
     # which has some default username and password if you have
     # configured keystone it will checkout the directory.
@@ -1898,7 +1898,10 @@ fi
 if is_service_enabled mysql && is_service_enabled nova; then
     # (re)create nova database
     mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'DROP DATABASE IF EXISTS nova;'
-    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'CREATE DATABASE nova;'
+    # Explicitly use latin1: to avoid lp#829209, nova expects the database to
+    # use latin1 by default, and then upgrades the database to utf8 (see the
+    # 082_essex.py in nova)
+    mysql -u$MYSQL_USER -p$MYSQL_PASSWORD -e 'CREATE DATABASE nova CHARACTER SET latin1;'
 
     # (re)create nova database
     $NOVA_DIR/bin/nova-manage db sync
@@ -2007,7 +2010,7 @@ if is_service_enabled key; then
     # launch keystone and wait for it to answer before continuing
     screen_it key "cd $KEYSTONE_DIR && $KEYSTONE_DIR/bin/keystone-all --config-file $KEYSTONE_CONF $KEYSTONE_LOG_CONFIG -d --debug"
     echo "Waiting for keystone to start..."
-    if ! timeout $SERVICE_TIMEOUT sh -c "while http_proxy= wget -O- $KEYSTONE_AUTH_PROTOCOL://$SERVICE_HOST:$KEYSTONE_API_PORT/v2.0/ 2>&1 | grep -q 'refused'; do sleep 1; done"; then
+    if ! timeout $SERVICE_TIMEOUT sh -c "while ! http_proxy= curl -s $KEYSTONE_AUTH_PROTOCOL://$SERVICE_HOST:$KEYSTONE_API_PORT/v2.0/ >/dev/null; do sleep 1; done"; then
       echo "keystone did not start"
       exit 1
     fi
