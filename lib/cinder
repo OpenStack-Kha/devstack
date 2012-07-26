@@ -107,7 +107,8 @@ function configure_cinder() {
     iniset $CINDER_CONF DEFAULT rabbit_host $RABBIT_HOST
     iniset $CINDER_CONF DEFAULT rabbit_password $RABBIT_PASSWORD
     iniset $CINDER_CONF DEFAULT api_paste_config $CINDER_API_PASTE_INI
-    iniset $CINDER_CONF DEFAULT root_helper "sudo ${CINDER_ROOTWRAP}"
+# folsom-2 doesn't have cinder root helper yet
+#    iniset $CINDER_CONF DEFAULT root_helper "sudo ${CINDER_ROOTWRAP}"
 
 }
 
